@@ -2,6 +2,8 @@
 
 BoxLang on Cloudflare Workers — compile [BoxLang](https://boxlang.io) `.bx` source files into WebAssembly and deploy them at the edge with Durable Object persistence, Hibernation API, and near-zero cold starts.
 
+> **Work in Progress**: SkyBox is under active development. APIs, build pipeline, and documentation may change. See [known issues](https://github.com/r3c0nc1l3r/SkyBox/issues) and the [CHANGELOG](CHANGELOG.md).
+
 ## Live Demos
 
 | Demo | URL | Description |
@@ -20,39 +22,38 @@ flowchart TB
 
     subgraph DO[Durable Object: MatchBoxWebSocketDO]
         VM[BoxLang VM\nwasm32-unknown-unknown]
-        VM --> L[Listener Instance\nYour .bx class]
-        L --> CH[Channel API\nCfWebSocketChannelObject]
-        L --> STATE[variables.* state\nDO Storage SQLite]
-        VM --> BIFS[WASM BIFs\nstring ops, math, array]
+        L[Listener Instance\nYour .bx class]
+        CH[Channel API\nCfWebSocketChannelObject]
+        STATE["variables.* state\nDO Storage (SQLite)"]
+        BIFS[WASM BIFs\nstring ops, math, array]
 
         subgraph Binding[Binding Call Bridge]
             D1[D1 Database\nCloudflare SQLite]
             VEC[Vectorize\nVector Database]
             AI[Workers AI\nEmbeddings + LLM]
-            OR[OpenRouter\nAI Chat API]
-            TURSO[Turso\nRemote SQLite]
         end
 
-        BIFS -.-> Binding
+        VM --> L
+        L --> CH
+        L --> STATE
+        VM --> BIFS
+        BIFS -.-> D1
+        BIFS -.-> VEC
+        BIFS -.-> AI
     end
 
     subgraph Clients[Connected Clients]
         WS1[WebSocket 1]
         WS2[WebSocket 2]
-        WSN[WebSocket N\nup to 32,768]
+        WSN["WebSocket N\nup to 32,768"]
     end
 
-    CF -->|WebSocket Upgrade| DO
-    CF -->|HTTP GET| DO
+    CF -->|WebSocket Upgrade| VM
+    CF -->|HTTP GET| VM
     CF -->|Static Assets| ASSETS
-    DO -->|sendMessage / sendJson| WS1
-    DO -->|sendMessage / sendJson| WS2
-    DO -->|broadcastMessage| WSN
-
-    style DO fill:#1a1a2e,stroke:#e94560,color:#fff
-    style VM fill:#16213e,stroke:#0f3460,color:#fff
-    style Binding fill:#16213e,stroke:#0f3460,color:#fff
-    style Cloudflare fill:#1a1a2e,stroke:#e94560,color:#fff
+    CH -->|sendMessage| WS1
+    CH -->|sendMessage| WS2
+    CH -->|broadcastMessage| WSN
 ```
 
 ## Build Pipeline
@@ -66,7 +67,7 @@ flowchart LR
     COMP --> BUILDER
     BUILDER -->|skybox:chunk custom section| WASM[dist/worker.wasm\nBoxLang VM + bytecode]
     BUILDER -->|skybox:ws_config custom section| WASM
-    WB --> GLUE[wasm_glue.js\nJS↔WASM bridge]
+    WB --> GLUE["wasm_glue.js\nJS <-> WASM bridge"]
 
     style BX fill:#4a4a8a,stroke:#666,color:#fff
     style RUST fill:#4a4a8a,stroke:#666,color:#fff
@@ -80,39 +81,39 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant W as Worker fetch()
+    participant W as Worker
     participant DO as Durable Object
     participant VM as BoxLang VM
     participant JS as JS Callout Bridge
     participant CF as Cloudflare Bindings
 
-    C->>W: WebSocket Upgrade Request
-    W->>DO: idFromName("default").fetch()
-    DO->>DO: acceptWebSocket(server)
-    DO->>VM: vm_on_connect(connId, requestData)
-    VM-->>VM: variables.state init
-    VM-->>DO: channel.sendJson(welcome)
-    DO-->>C: WebSocket 101 + welcome message
+    C->>W: WebSocket Upgrade
+    W->>DO: route to idFromName
+    DO->>DO: acceptWebSocket
+    DO->>VM: vm_on_connect
+    VM-->>VM: init variables.state
+    VM-->>DO: channel.sendJson
+    DO-->>C: WebSocket 101 + welcome
 
-    C->>DO: "search BoxLang classes"
-    DO->>VM: vm_on_message(connId, msgBytes)
+    C->>DO: search query text
+    DO->>VM: vm_on_message
     VM->>VM: parse text command
-    VM->>JS: __skybox_binding_call(...)
-    JS->>CF: env.AI.run('@cf/...', {text: query})
+    VM->>JS: __skybox_binding_call
+    JS->>CF: Workers AI embed
     CF-->>JS: embedding vector
-    JS->>CF: env.VECTORIZE.query(vector, ...)
+    JS->>CF: Vectorize query
     CF-->>JS: matches with scores
-    JS->>CF: env.DB.prepare(sql).bind(...).all()
-    CF-->>JS: D1 results
-    JS-->>VM: vm_complete_async(results)
+    JS->>CF: D1 lookup
+    CF-->>JS: chunk text
+    JS-->>VM: vm_complete_async
     VM->>VM: build response
-    VM-->>DO: channel.sendJson(response)
+    VM-->>DO: channel.sendJson
     DO-->>C: WebSocket message
 
     C->>DO: WebSocket close
-    DO->>VM: vm_on_close(connId)
-    VM->>VM: cleanup
-    DO->>DO: storage.put(listener_state)
+    DO->>VM: vm_on_close
+    VM->>VM: cleanup state
+    DO->>DO: storage.put
 ```
 
 ## Quick Start
@@ -326,6 +327,22 @@ npx wrangler deploy
 ```
 
 > **Note**: In wrangler v4+, `wrangler deploy` only uploads but doesn't switch traffic. You must use `wrangler versions deploy` to make it live.
+
+## Development Notes
+
+### Mermaid Diagrams
+
+Diagrams are rendered with [Mermaid.js](https://mermaid.js.org/). To validate changes locally:
+
+```bash
+npx @mermaid-js/mermaid-cli -i diagram.mmd -o diagram.png
+```
+
+Common pitfalls:
+- Avoid edges that reference subgraph IDs directly (point to nodes instead)
+- Use `<br/>` or `\n` for line breaks in node labels — both work in most renderers
+- Avoid unicode escapes like `\u2194` — use the literal character or text like `<->`
+- Parentheses `()` and special chars in participant aliases should be avoided in sequence diagrams
 
 ## License
 
