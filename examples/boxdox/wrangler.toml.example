@@ -9,8 +9,12 @@
 #   1. D1 database:      npx wrangler d1 create skybox-boxdox-db
 #   2. Vectorize index:   npx wrangler vectorize create skybox-boxdox-vectors --dimensions 768
 #   3. R2 bucket:         npx wrangler r2 bucket create skybox-boxdox-content
-#   4. Secrets:           npx wrangler secret put OPENROUTER_API_KEY
-#                          npx wrangler secret put VOWEL_APP_ID
+#   4. Secrets:           npx wrangler secret put VOWEL_APP_ID
+#
+# AI binding uses Workers AI built-in (no API key needed).
+# Model: @cf/google/gemma-4-26b-a4b-it
+# Rate-limited: 10 calls/min per connection, 1000/day global (free tier protection).
+# Navigation: AI auto-navigates to the best matching doc page based on RAG results.
 #
 # account_id is optional — set CLOUDFLARE_ACCOUNT_ID env var, or omit for auto-detect
 # ═══════════════════════════════════════════════════════════════════════

@@ -132,10 +132,10 @@ class BoxDoxListener {
             },
             {
                 id: "bl-005",
-                title: "OpenRouter AI Chat Integration",
+                title: "Workers AI Chat Integration (Gemma 4)",
                 source: "BoxLang Docs",
-                tags: "openrouter,ai,chat,streaming",
-                content: "OpenRouter provides a unified API for accessing multiple AI models. SkyChat uses openRouterChat() which is a fire-and-forget BIF that sends messages to OpenRouter and streams responses back via Server-Sent Events (SSE). The system message is constructed with RAG context injected as knowledge facts. Conversation history is maintained in-memory per WebSocket session, trimmed to the last 30 messages to stay within context limits. The OpenRouter free tier provides access to models like Mistral-7B and Llama-3."
+                tags: "workers-ai,gemma,chat,streaming,navigation",
+                content: "BoxDox uses Cloudflare Workers AI with the @cf/google/gemma-4-26b-a4b-it model for AI chat. The env.AI.run() binding streams responses back via Server-Sent Events (SSE). When a user asks about a topic, RAG finds the best matching documentation page, the client auto-navigates to it via a navigate SSE event, and then the AI streams its answer with the relevant context injected. Rate-limited to 10 calls/min per connection and 1000 calls/day globally."
             }
         ];
     }

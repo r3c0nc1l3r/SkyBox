@@ -231,6 +231,16 @@ export default {
             return handleSeed(env);
         }
 
+        // Ingest endpoint: index a single doc from external script
+        if (path === '/api/ingest' && request.method === 'POST') {
+            return handleIngest(env, request);
+        }
+
+        // Benchmark embedding batch sizes
+        if (path === '/api/bench' && request.method === 'POST') {
+            return handleBench(env, request);
+        }
+
         // Stats: directly from D1 (BoxLang VM can't unwrap async futures)
         if (path === '/api/stats') {
             try {
@@ -252,8 +262,8 @@ export default {
                 return new Response(JSON.stringify({ error: 'Missing query parameter q' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
             }
             try {
-                // For now, return empty results (embedding requires Workers AI)
-                return new Response(JSON.stringify({ query, results: [] }), { headers: { 'Content-Type': 'application/json' } });
+                const results = await doSearch(query, env);
+                return new Response(JSON.stringify({ query, results }), { headers: { 'Content-Type': 'application/json' } });
             } catch (e) {
                 return new Response(JSON.stringify({ query, results: [], error: e.message }), { headers: { 'Content-Type': 'application/json' } });
             }
@@ -278,17 +288,12 @@ export default {
                 ai: {
                     model: 'google/gemma-4-26b-a4b-it:free',
                 },
-                turnstileSiteKey: env.TURNSTILE_SITE_KEY || '',
+                turnstileSiteKey: '',
             }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' } });
         }
 
         // SSE endpoint: route to DO
         if (path === '/events') {
-            const token = url.searchParams.get('turnstile_token') || '';
-            if (env.TURNSTILE_SECRET_KEY && token) {
-                const valid = await validateTurnstile(env.TURNSTILE_SECRET_KEY, token, request.headers.get('CF-Connecting-IP') || '');
-                if (!valid) return new Response('Forbidden: bot detected', { status: 403 });
-            }
             const doId = env.WEBSOCKET_DO.idFromName('default');
             const stub = env.WEBSOCKET_DO.get(doId);
             return stub.fetch(request);
@@ -296,11 +301,6 @@ export default {
 
         // WebSocket upgrade: route to DO
         if (request.headers.get('Upgrade') === 'websocket') {
-            const token = url.searchParams.get('turnstile_token') || '';
-            if (env.TURNSTILE_SECRET_KEY && token) {
-                const valid = await validateTurnstile(env.TURNSTILE_SECRET_KEY, token, request.headers.get('CF-Connecting-IP') || '');
-                if (!valid) return new Response('Forbidden: bot detected', { status: 403 });
-            }
             const doId = env.WEBSOCKET_DO.idFromName('default');
             const stub = env.WEBSOCKET_DO.get(doId);
             return stub.fetch(request);
@@ -456,8 +456,135 @@ function parseDocPage(raw, docPath, r2key) {
  * We use fetch() to loop back through the asset system since there's no direct
  * programmatic ASSETS binding.
  */
+async function handleBench(env, request) {
+    const results = [];
+    const sizes = [1, 3, 5, 10, 20, 50];
+    const testText = 'BoxLang is a modern dynamic programming language. '.repeat(20);
+
+    for (const size of sizes) {
+        const texts = Array.from({ length: size }, (_, i) => `${testText} [${i}]`);
+        const timings = [];
+        for (let trial = 0; trial < 2; trial++) {
+            const t0 = Date.now();
+            try {
+                const resp = await env.AI.run('@cf/baai/bge-small-en-v1.5', { text: texts });
+                const dt = Date.now() - t0;
+                const dims = resp.data?.[0]?.length || resp.result?.data?.[0]?.length || 0;
+                timings.push({ ms: dt, ok: true, dims });
+            } catch (err) {
+                timings.push({ ms: Date.now() - t0, ok: false, error: err.message });
+            }
+        }
+        results.push({ batchSize: size, trials: timings });
+    }
+
+    return new Response(JSON.stringify(results, null, 2), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+}
+
+async function handleIngest(env, request) {
+    try {
+        const body = await request.json();
+        const { filePath, content, title: overrideTitle } = body;
+        if (!filePath || !content) {
+            return new Response(JSON.stringify({ error: 'filePath and content required' }), {
+                status: 400, headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
+        let title = overrideTitle || filePath.split('/').pop().replace(/\.(md|mdx)$/i, '');
+        let bodyContent = content;
+        let frontmatter = {};
+
+        if (content.startsWith('---')) {
+            const endIdx = content.indexOf('---', 3);
+            if (endIdx > 3) {
+                const fmRaw = content.slice(3, endIdx).trim();
+                bodyContent = content.slice(endIdx + 3).trim();
+                for (const line of fmRaw.split('\n')) {
+                    const ci = line.indexOf(':');
+                    if (ci > 0) {
+                        let val = line.slice(ci + 1).trim();
+                        if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"')))
+                            val = val.slice(1, -1);
+                        frontmatter[line.slice(0, ci).trim()] = val;
+                    }
+                }
+                title = frontmatter.title || title;
+            }
+        }
+
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL,
+            source TEXT DEFAULT '', tags TEXT DEFAULT '',
+            metadata TEXT DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+        )`).run();
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS chunks (
+            id TEXT PRIMARY KEY, doc_id TEXT NOT NULL, text TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL DEFAULT 0,
+            metadata TEXT DEFAULT '{}', created_at TEXT DEFAULT (datetime('now'))
+        )`).run();
+        await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chunks_doc_id ON chunks(doc_id)`).run();
+
+        const docId = 'doc-' + simpleHash(filePath);
+        const tags = frontmatter.tags || frontmatter.category || '';
+
+        await env.DB.prepare(
+            `INSERT OR REPLACE INTO documents (id, title, content, source, tags, metadata) VALUES (?, ?, ?, ?, ?, ?)`
+        ).bind(docId, title, bodyContent, filePath, tags, JSON.stringify(frontmatter)).run();
+
+        const chunks = simpleChunk(bodyContent, 2000, 200);
+        const chunkEntries = chunks.map((text, ci) => ({ id: docId + '-chunk-' + ci, docId, text, chunkIndex: ci, path: filePath }));
+
+        const BATCH = 20;
+        let chunkCount = 0;
+
+        for (let i = 0; i < chunkEntries.length; i += BATCH) {
+            const batch = chunkEntries.slice(i, i + BATCH);
+
+            try {
+                const embedResp = await env.AI.run('@cf/baai/bge-small-en-v1.5', { text: batch.map(c => c.text) });
+                const embeddings = embedResp.data || embedResp.result?.data || [];
+                const vecBatch = [];
+                for (let j = 0; j < batch.length; j++) {
+                    if (embeddings[j]) {
+                        vecBatch.push({
+                            id: batch[j].id,
+                            values: embeddings[j],
+                            metadata: { docId: batch[j].docId, text: batch[j].text.slice(0, 200), chunkIndex: batch[j].chunkIndex, path: batch[j].path },
+                        });
+                    }
+                }
+                if (vecBatch.length > 0) await env.VECTORIZE.upsert(vecBatch);
+            } catch (err) {
+                console.error('Ingest embed error for', filePath, 'batch', i, err.message);
+            }
+
+            await insertChunksBatch(env.DB, batch);
+            chunkCount += batch.length;
+        }
+
+        return new Response(JSON.stringify({ status: 'ok', docId, title, chunkCount, totalChunks: chunkEntries.length }), {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+        });
+    } catch (err) {
+        return new Response(JSON.stringify({ error: err.message, stack: err.stack }), {
+            status: 500, headers: { 'Content-Type': 'application/json' },
+        });
+    }
+}
+
 async function handleSeed(env) {
     try {
+        // Idempotent incremental seed: skip docs already in D1, only process new ones.
+        const existingDocIds = new Set();
+        const existing = await env.DB.prepare('SELECT id FROM documents').all();
+        for (const row of existing.results || []) {
+            existingDocIds.add(row.id);
+        }
+
         const origin = 'https://skybox-boxdox.c0d3t3k.workers.dev';
         const readAsset = async (path) => {
             // Priority: R2 bucket → ASSETS binding → worker URL fetch
@@ -490,6 +617,9 @@ async function handleSeed(env) {
             if (node.type === 'file' && node.is_markdown) mdFiles.push(node.path);
             if (node.children) node.children.forEach(walk);
         })(navTree);
+
+        // Quick skip if all docs and chunks already seeded
+        const existingChunkTotal = (await env.DB.prepare('SELECT COUNT(*) as cnt FROM chunks').all())?.results?.[0]?.cnt || 0;
 
         // Ensure tables exist
         await env.DB.prepare(`CREATE TABLE IF NOT EXISTS documents (
@@ -538,69 +668,51 @@ async function handleSeed(env) {
             const docId = 'doc-' + simpleHash(filePath);
             const tags = frontmatter.tags || frontmatter.category || '';
 
-            await env.DB.prepare(
-                `INSERT OR REPLACE INTO documents (id, title, content, source, tags, metadata) VALUES (?, ?, ?, ?, ?, ?)`
-            ).bind(docId, title, content, filePath, tags, JSON.stringify(frontmatter)).run();
-            docCount++;
+            if (!existingDocIds.has(docId)) {
+                await env.DB.prepare(
+                    `INSERT OR REPLACE INTO documents (id, title, content, source, tags, metadata) VALUES (?, ?, ?, ?, ?, ?)`
+                ).bind(docId, title, content, filePath, tags, JSON.stringify(frontmatter)).run();
+                docCount++;
+            }
 
-            const chunks = simpleChunk(content, 500, 100);
+            const chunks = simpleChunk(content, 2000, 200);
             for (let ci = 0; ci < chunks.length; ci++) {
-                allChunks.push({ id: docId + '-chunk-' + ci, docId, text: chunks[ci], chunkIndex: ci });
+                allChunks.push({ id: docId + '-chunk-' + ci, docId, text: chunks[ci], chunkIndex: ci, path: filePath });
             }
         }
 
-        // Batch embed and store
+        // Embed and store in small batches
         let chunkCount = 0;
-        if (allChunks.length > 0) {
-            const batchSize = 96;
-            const AI = env.AI;
-            for (let i = 0; i < allChunks.length; i += batchSize) {
-                const batch = allChunks.slice(i, i + batchSize);
-                const texts = batch.map(c => c.text.slice(0, 512));
+        let skipCount = 0;
+        const AI = env.AI;
 
-                // Generate embeddings — use Workers AI if available, else random
-                let embeddings;
-                if (AI) {
-                    const resp = await AI.run('@cf/baai/bge-base-en-v1.5', { text: texts });
-                    embeddings = resp.data || [];
-                } else {
-                    const dims = 768;
-                    embeddings = texts.map(() => Array.from({ length: dims }, () => Math.random()));
-                }
+        const BATCH = 20;
+        for (let i = 0; i < allChunks.length; i += BATCH) {
+            const batch = allChunks.slice(i, i + BATCH);
 
+            try {
+                const embedResp = await AI.run('@cf/baai/bge-small-en-v1.5', { text: batch.map(c => c.text) });
+                const embeddings = embedResp.data || embedResp.result?.data || [];
                 const vecBatch = [];
-                const d1Batch = [];
-                for (let j = 0; j < embeddings.length; j++) {
-                    const c = batch[j];
-                    vecBatch.push({
-                        id: c.id,
-                        values: embeddings[j],
-                        metadata: { docId: c.docId, text: c.text.slice(0, 200), chunkIndex: c.chunkIndex },
-                    });
-                    d1Batch.push(env.DB.prepare(
-                        `INSERT OR REPLACE INTO chunks (id, doc_id, text, chunk_index) VALUES (?, ?, ?, ?)`
-                    ).bind(c.id, c.docId, c.text, c.chunkIndex));
-                }
-
-                if (vecBatch.length > 0) {
-                    try {
-                        await env.VECTORIZE.upsert(vecBatch);
-                    } catch (upsertErr) {
-                        // If upsert fails, try one by one
-                        console.error('Batch upsert failed, trying individual:', upsertErr.message);
-                        for (const v of vecBatch) {
-                            try { await env.VECTORIZE.upsert([v]); } catch (e) {
-                                console.error('Single upsert failed:', v.id, e.message);
-                            }
-                        }
+                for (let j = 0; j < batch.length; j++) {
+                    if (embeddings[j]) {
+                        vecBatch.push({
+                            id: batch[j].id,
+                            values: embeddings[j],
+                            metadata: { docId: batch[j].docId, text: batch[j].text.slice(0, 200), chunkIndex: batch[j].chunkIndex, path: batch[j].path },
+                        });
                     }
                 }
-                if (d1Batch.length > 0) await env.DB.batch(d1Batch);
-                chunkCount += batch.length;
+                if (vecBatch.length > 0) await env.VECTORIZE.upsert(vecBatch);
+            } catch (err) {
+                console.error('Embed batch error at', i, err.message);
             }
+
+            await insertChunksBatch(env.DB, batch);
+            chunkCount += batch.length;
         }
 
-        return new Response(JSON.stringify({ status: 'ok', docCount, chunkCount, totalFiles: mdFiles.length }), {
+        return new Response(JSON.stringify({ status: 'ok', docCount, chunkCount, skipCount, totalFiles: mdFiles.length, done: true }), {
             status: 200, headers: { 'Content-Type': 'application/json' },
         });
     } catch (err) {
@@ -610,24 +722,12 @@ async function handleSeed(env) {
     }
 }
 
-/**
- * Validate a Turnstile token against Cloudflare's siteverify endpoint.
- * Returns true if the token is valid, false otherwise.
- */
-async function validateTurnstile(secret, token, ip) {
-    try {
-        const formData = new URLSearchParams({ secret, response: token });
-        if (ip) formData.set('remoteip', ip);
-        const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-            method: 'POST',
-            body: formData,
-        });
-        const data = await res.json();
-        return data.success === true;
-    } catch (err) {
-        console.error('Turnstile validation error:', err);
-        return false;
-    }
+async function insertChunksBatch(db, chunks) {
+    if (chunks.length === 0) return;
+    const placeholders = chunks.map(() => '(?,?,?,?,?)').join(',');
+    const sql = `INSERT OR REPLACE INTO chunks (id, doc_id, text, chunk_index, metadata) VALUES ${placeholders}`;
+    const values = chunks.flatMap(c => [c.id, c.docId, c.text, c.chunkIndex, JSON.stringify({ path: c.path })]);
+    await db.prepare(sql).bind(...values).run();
 }
 
 function simpleHash(str) {
@@ -652,6 +752,38 @@ function simpleChunk(text, chunkSize, overlap) {
     return result;
 }
 
+/**
+ * Search docs by semantic similarity: embed query → Vectorize → lookup chunks from D1.
+ */
+async function doSearch(query, env) {
+    if (!env.AI || !env.VECTORIZE || !env.DB) return [];
+
+    const response = await env.AI.run('@cf/baai/bge-small-en-v1.5', { text: query });
+    const data = response?.data || response?.result?.data || [];
+    const embedding = data[0];
+    if (!embedding) return [];
+
+    const vecResult = await env.VECTORIZE.query(embedding, { topK: 10, returnMetadata: true, returnValues: false });
+    const matches = (vecResult.matches || []).map(m => ({
+        id: m.id,
+        score: 1 - (m.score / 2),
+        metadata: m.metadata || {},
+    }));
+
+    const results = [];
+    for (const m of matches) {
+        const row = await env.DB.prepare('SELECT text FROM chunks WHERE id = ?').bind(m.id).first();
+        results.push({
+            id: m.id,
+            text: (row?.text || '').slice(0, 500),
+            score: m.score,
+            docId: m.metadata.docId || '',
+            path: m.metadata.path || '',
+        });
+    }
+    return results;
+}
+
 // ── Durable Object ──────────────────────────────────────────────────
 
 export class MatchBoxWebSocketDO {
@@ -664,6 +796,7 @@ export class MatchBoxWebSocketDO {
         this.sseStreams = new Map();
         this.chatHistories = new Map();
         this.aiRateLimitMap = new Map(); // connectionId -> { count, windowStart }
+        this.aiDailyCount = { count: 0, date: '' };
         this.ctx.blockConcurrencyWhile(async () => {
             await this.initWasm();
             await this.restoreState();
@@ -998,18 +1131,10 @@ export class MatchBoxWebSocketDO {
     }
 
     async handleChatRAG(connectionId, prompt) {
-        // In-memory rate limit: 10 AI calls per 60 seconds per connection (free abuse prevention)
-        const now = Date.now();
-        let rl = this.aiRateLimitMap.get(connectionId);
-        if (!rl || now - rl.windowStart > 60000) {
-            rl = { count: 0, windowStart: now };
-            this.aiRateLimitMap.set(connectionId, rl);
-        }
-        rl.count++;
-        if (rl.count > 10) {
+        // Rate limit check (per-connection + global daily)
+        if (this.checkAIChatRateLimit(connectionId)) {
             this.sseSend(connectionId, 'app_error', { type: 'app_error', body: 'Rate limit exceeded. Please wait before sending more messages.' });
             this.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
-            console.log(`Rate limited connection ${connectionId}: ${rl.count} calls in window`);
             return;
         }
 
@@ -1026,6 +1151,7 @@ export class MatchBoxWebSocketDO {
         }
 
         let ragContext = '';
+        let navPath = '';
         try {
             const embedding = await this.embedQuery(prompt);
             if (embedding) {
@@ -1033,9 +1159,18 @@ export class MatchBoxWebSocketDO {
                 if (matches && matches.length > 0) {
                     const chunkIds = matches.map(m => m.id);
                     const chunkTexts = await this.lookupChunksFromD1(chunkIds);
-                    ragContext = chunkTexts.map((t, i) =>
-                        `[Source: ${matches[i].metadata?.path || matches[i].id}] Score: ${(matches[i].score * 100).toFixed(0)}%\n${t}`
-                    ).join('\n\n');
+
+                    // Best match drives doc navigation
+                    const best = matches[0];
+                    const bestPath = best.metadata?.path || '';
+                    if (bestPath) {
+                        navPath = bestPath.replace(/\.mdx?$/i, '');
+                    }
+
+                    ragContext = chunkTexts.map((t, i) => {
+                        const src = matches[i].metadata?.path || matches[i].id;
+                        return t;
+                    }).join('\n\n---\n\n');
                     this.sseSend(connectionId, 'rag_debug', { type: 'rag_debug', query: prompt, chunks: matches.map((m, i) => ({ id: m.id, text: (chunkTexts[i] || '').slice(0, 300), score: m.score, metadata: m.metadata || {} })) });
                 }
             }
@@ -1043,23 +1178,35 @@ export class MatchBoxWebSocketDO {
             console.error('RAG pipeline error:', err);
         }
 
+        // Navigate to the best matching doc page, then stream the AI response
+        if (navPath) {
+            this.sseSend(connectionId, 'navigate', { type: 'navigate', path: navPath });
+        }
+
+        const systemContent = 'You are a BoxLang documentation assistant. Answer questions about BoxLang, MatchBox, and related technologies.'
+            + (ragContext
+                ? '\n\nHERE IS THE ACTUAL DOCUMENTATION CONTENT RETRIEVED FROM THE KNOWLEDGE BASE. You MUST use this content to answer the user\'s question. Do NOT say you lack documentation on a topic if content about it is provided below.\n\n' + ragContext
+                : '');
+
         const messages = [
-            {
-                role: 'system',
-                content: 'You are a BoxLang documentation assistant. Answer questions about BoxLang, MatchBox, and related technologies.' +
-                    (ragContext ? '\n\nRelevant documentation context:\n' + ragContext : ''),
-            },
+            { role: 'system', content: systemContent },
             ...history.slice(-20),
         ];
 
-        const apiKey = this.env.OPENROUTER_API_KEY;
-        if (!apiKey) {
+        if (!this.env.AI) {
             this.sseSend(connectionId, 'error', { type: 'error', body: 'AI service not configured' });
             this.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
             return;
         }
 
-        await this.streamOpenRouter(connectionId, JSON.stringify(messages), 'google/gemma-4-26b-a4b-it:free', apiKey);
+        try {
+            await this.streamWorkersAIChat(connectionId, messages);
+        } catch (err) {
+            console.error('Workers AI stream error:', err.message, err.stack);
+            this.sseSend(connectionId, 'app_error', { type: 'app_error', body: 'AI response failed: ' + err.message });
+            this.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
+            return;
+        }
 
         history.push({ role: 'assistant', content: '' });
         if (history.length > 40) {
@@ -1070,7 +1217,7 @@ export class MatchBoxWebSocketDO {
     async embedQuery(text) {
         if (this.env.AI) {
             try {
-                const response = await this.env.AI.run('@cf/baai/bge-base-en-v1.5', { text });
+                const response = await this.env.AI.run('@cf/baai/bge-small-en-v1.5', { text });
                 const data = response?.data || response?.result?.data || [];
                 return data[0] || null;
             } catch (err) {
@@ -1250,7 +1397,7 @@ export class MatchBoxWebSocketDO {
     async embedAsync(msg) {
         const async_id = msg.async_id;
         try {
-            const model = msg.args.options?.model || '@cf/baai/bge-base-en-v1.5';
+            const model = msg.args.options?.model || '@cf/baai/bge-small-en-v1.5';
             const input = msg.args.input;
             const response = await this.env.AI.run(model, { text: input });
             const data = response?.data || response?.result?.data || [];
@@ -1371,26 +1518,103 @@ export class MatchBoxWebSocketDO {
         return JSON.stringify({ success: true, async_id });
     }
 
-    // ── OpenRouter Streaming Handler ──────────────────────────────
+    // ── Workers AI Chat Handler (GLM-4.7-Flash) ───────────────────
+
+    checkAIChatRateLimit(connectionId) {
+        const now = Date.now();
+
+        // Per-connection: 10 requests per 60-second sliding window
+        let rl = this.aiRateLimitMap.get(connectionId);
+        if (!rl || now - rl.windowStart > 60000) {
+            rl = { count: 0, windowStart: now };
+            this.aiRateLimitMap.set(connectionId, rl);
+        }
+        rl.count++;
+        if (rl.count > 10) {
+            console.log(`Rate limited connection ${connectionId}: ${rl.count} calls in window`);
+            return true;
+        }
+
+        // Global: 1000 requests per calendar day (Workers AI free tier ~10k/mo)
+        const today = new Date().toDateString();
+        if (this.aiDailyCount.date !== today) {
+            this.aiDailyCount = { count: 0, date: today };
+        }
+        this.aiDailyCount.count++;
+        if (this.aiDailyCount.count > 1000) {
+            console.log(`Global daily rate limit hit: ${this.aiDailyCount.count} calls`);
+            return true;
+        }
+
+        return false;
+    }
+
+    async streamWorkersAIChat(connectionId, messages) {
+        this.sseSend(connectionId, 'ai_start', { type: 'ai_start' });
+
+        const stream = await this.env.AI.run('@cf/google/gemma-4-26b-a4b-it', {
+            messages,
+            stream: true,
+        });
+
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                const data = trimmed.slice(6);
+                if (data === '[DONE]') continue;
+
+                try {
+                    const parsed = JSON.parse(data);
+                    const content = parsed.response || parsed.choices?.[0]?.delta?.content || '';
+                    if (content) {
+                        this.sseSend(connectionId, 'ai_chunk', { type: 'ai_chunk', content });
+                    }
+                } catch {
+                    // skip unparseable chunks
+                }
+            }
+        }
+
+        this.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
+    }
+
+    // ── Binding Call Fallback (Workers AI) ────────────────────────
+    // Called when Rust BIF sends action:'openrouter'. Delegates to Workers AI.
 
     handleOpenRouter(msg, binding) {
-        const apiKey = binding;
         const connectionId = msg.args.connection_id;
-        const messages = msg.args.messages;
-        const model = msg.args.model || 'google/gemma-4-26b-a4b-it:free';
+        const messages = JSON.parse(msg.args.messages);
         const self = this;
 
-        if (!apiKey) {
-            console.error('OpenRouter: no API key in binding', msg.binding_name);
+        if (this.checkAIChatRateLimit(connectionId)) {
+            self.sseSend(connectionId, 'app_error', { type: 'app_error', body: 'Rate limit exceeded. Please wait before sending more messages.' });
+            self.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
+            return { success: true, async_id: 0 };
+        }
+
+        if (!this.env.AI) {
             self.sseSend(connectionId, 'error', { type: 'error', body: 'AI service not configured' });
             self.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
-        } else {
-            this.streamOpenRouter(connectionId, messages, model, apiKey).catch(err => {
-                console.error('OpenRouter stream error:', err.message, err.stack);
-                self.sseSend(connectionId, 'error', { type: 'error', body: 'AI response failed: ' + err.message });
-                self.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
-            });
+            return { success: true, async_id: 0 };
         }
+
+        this.streamWorkersAIChat(connectionId, messages).catch(err => {
+            console.error('Workers AI stream error:', err.message, err.stack);
+            self.sseSend(connectionId, 'error', { type: 'error', body: 'AI response failed: ' + err.message });
+            self.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
+        });
 
         return { success: true, async_id: 0 };
     }
@@ -1423,65 +1647,6 @@ export class MatchBoxWebSocketDO {
             }
         }
         return false;
-    }
-
-    async streamOpenRouter(connectionId, messagesJson, model, apiKey) {
-        const url = 'https://openrouter.ai/api/v1/chat/completions';
-
-        const body = JSON.stringify({
-            model,
-            messages: JSON.parse(messagesJson),
-            stream: true,
-        });
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-            },
-            body,
-        });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`OpenRouter HTTP ${response.status}: ${errText}`);
-        }
-
-        this.sseSend(connectionId, 'ai_start', { type: 'ai_start' });
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-                const data = trimmed.slice(6);
-                if (data === '[DONE]') break;
-
-                try {
-                    const parsed = JSON.parse(data);
-                    const content = parsed.choices?.[0]?.delta?.content || '';
-                    if (content) {
-                        this.sseSend(connectionId, 'ai_chunk', { type: 'ai_chunk', content });
-                    }
-                } catch {
-                    // skip unparseable chunks
-                }
-            }
-        }
-
-        this.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
     }
 }
 

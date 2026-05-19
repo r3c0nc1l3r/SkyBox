@@ -3,6 +3,12 @@ main = "mcf-worker.js"
 compatibility_date = "2025-01-01"
 account_id = "84882f590c2154079d59fbaef6fb382b"
 
+workers_dev = true
+
+routes = [
+  { pattern = "skybox-boxdox.codetek.us/*", zone_name = "codetek.us" }
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "skybox-boxdox-db"
@@ -15,12 +21,6 @@ index_name = "skybox-boxdox-vectors"
 [[r2_buckets]]
 binding = "DOCS_BUCKET"
 bucket_name = "skybox-boxdox-content"
-
-workers_dev = true
-
-routes = [
-  { pattern = "skybox-boxdox.codetek.us/*", zone_name = "codetek.us" }
-]
 
 [[durable_objects.bindings]]
 name = "WEBSOCKET_DO"
