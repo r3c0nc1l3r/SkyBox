@@ -147,19 +147,9 @@ export default function App() {
         return
       }
 
-      // 2. Load Turnstile API script
-      if (!(window as any).turnstile) {
-        const script = document.createElement('script')
-        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=_turnstileOnLoad&render=explicit'
-        script.async = true
-        script.defer = true
-        document.head.appendChild(script)
-      }
-
-      // 3. Wait for Turnstile to be ready (polling fallback)
+      // 2. Wait for Turnstile to be ready (script loaded from index.html)
       await new Promise<void>((resolve) => {
         if ((window as any).turnstile) { resolve(); return }
-        ;(window as any)._turnstileOnLoad = () => resolve()
         const poll = setInterval(() => {
           if ((window as any).turnstile) { clearInterval(poll); resolve() }
         }, 200)
@@ -450,7 +440,6 @@ export default function App() {
 
       <RagDebugPanel ragLogs={ragLogs} />
       <VowelAgent />
-      <div id="turnstile-container" style={{ position: 'fixed', bottom: 0, right: 0, width: 0, height: 0, overflow: 'hidden', opacity: 0, zIndex: -1 }} />
     </>
   )
 }
