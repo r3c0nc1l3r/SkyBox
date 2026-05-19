@@ -8,12 +8,15 @@ echo "=== BoxDox Multi-File Build ==="
 
 BOXDOX_CONTENT="${BOXDOX_CONTENT:-/home/k/Git/BoxLang/box-dox/content}"
 
+echo "[1/6] Applying vendor patches..."
+bash "$PROJECT_ROOT/scripts/apply-patches.sh" 2>&1 | sed 's/^/  /'
+
 MERGED_DIR="$SCRIPT_DIR/.skybox-build"
 MERGED_FILE="$MERGED_DIR/merged_source.bx"
 mkdir -p "$MERGED_DIR"
 rm -f "$MERGED_FILE"
 
-echo "[1/5] Concatenating BoxLang sources..."
+echo "[2/6] Concatenating BoxLang sources..."
 for f in "$SCRIPT_DIR/src/listeners/BoxDoxListener.bx"; do
     if [ -f "$f" ]; then
         echo "  + $(basename $(dirname $f))/$(basename $f)"
@@ -74,6 +77,9 @@ echo "  Symlinked: $SCRIPT_DIR/worker.wasm -> dist/worker.wasm"
 
 # Remove large ONNX WASM (exceeds CF 25 MiB asset limit)
 find "$ASSETS_DIR" -name "*ort-wasm*" -delete 2>/dev/null
+
+echo "[6/6] Reverting vendor patches..."
+bash "$PROJECT_ROOT/scripts/apply-patches.sh" --revert 2>&1 | sed 's/^/  /'
 
 echo "=== Build Complete ==="
 du -sh "$ASSETS_DIR" "$SCRIPT_DIR/dist/worker.wasm"

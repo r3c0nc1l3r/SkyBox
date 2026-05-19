@@ -1,0 +1,27 @@
+From 1159576c7859ad12bec94bf1bc718cc5e8ff00a1 Mon Sep 17 00:00:00 2001
+From: r3c0nc13r <r3c0nc13r@proton.me>
+Date: Wed, 6 May 2026 20:45:20 -0400
+Subject: [PATCH] fix: use web_time::Instant instead of std::time::Instant for
+ wasm32 target
+
+---
+ crates/matchbox-vm/src/vm/mod.rs | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/crates/matchbox-vm/src/vm/mod.rs b/crates/matchbox-vm/src/vm/mod.rs
+index b014d55..222172c 100644
+--- a/crates/matchbox-vm/src/vm/mod.rs
++++ b/crates/matchbox-vm/src/vm/mod.rs
+@@ -24,7 +24,8 @@ use std::collections::HashSet;
+ use std::rc::Rc;
+ use std::cell::RefCell;
+ use std::sync::mpsc::{self, Receiver, Sender};
+-use std::time::{Instant, Duration};
++use web_time::Instant;
++use std::time::Duration;
+ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::vec;
+ 
+-- 
+2.54.0
+

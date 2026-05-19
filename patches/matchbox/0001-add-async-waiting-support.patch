@@ -1,0 +1,115 @@
+diff --git a/crates/matchbox-vm/src/types/macros_test.rs b/crates/matchbox-vm/src/types/macros_test.rs
+index 6f6a91c..d92f004 100644
+--- a/crates/matchbox-vm/src/types/macros_test.rs
++++ b/crates/matchbox-vm/src/types/macros_test.rs
+@@ -85,6 +85,7 @@ mod tests {
+         fn future_new(&mut self) -> BxValue { BxValue::new_null() }
+         fn future_resolve(&mut self, _: BxValue, _: BxValue) -> Result<(), String> { Ok(()) }
+         fn future_reject(&mut self, _: BxValue, _: BxValue) -> Result<(), String> { Ok(()) }
++        fn set_async_waiting(&mut self, _: u64) {}
+         fn future_schedule_resolve(&mut self, _: BxValue, _: BxValue) -> Result<(), String> { Ok(()) }
+         fn future_schedule_reject(&mut self, _: BxValue, _: BxValue) -> Result<(), String> { Ok(()) }
+         fn native_future_new(&mut self) -> NativeFutureHandle {
+diff --git a/crates/matchbox-vm/src/types/mod.rs b/crates/matchbox-vm/src/types/mod.rs
+index bcb9bd5..40a4a0e 100644
+--- a/crates/matchbox-vm/src/types/mod.rs
++++ b/crates/matchbox-vm/src/types/mod.rs
+@@ -153,6 +153,10 @@ pub trait BxVM {
+     fn future_new(&mut self) -> BxValue;
+     fn future_resolve(&mut self, future: BxValue, value: BxValue) -> Result<(), String>;
+     fn future_reject(&mut self, future: BxValue, error: BxValue) -> Result<(), String>;
++    /// Mark the current fiber as waiting for an async operation.
++    /// This causes call_method_value to break out of its loop so the
++    /// caller can handle the async operation and resume later.
++    fn set_async_waiting(&mut self, async_id: u64);
+     fn future_schedule_resolve(&mut self, future: BxValue, value: BxValue) -> Result<(), String>;
+     fn future_schedule_reject(&mut self, future: BxValue, error: BxValue) -> Result<(), String>;
+     fn native_future_new(&mut self) -> NativeFutureHandle;
+diff --git a/crates/matchbox-vm/src/vm/mod.rs b/crates/matchbox-vm/src/vm/mod.rs
+index 222172c..b469be4 100644
+--- a/crates/matchbox-vm/src/vm/mod.rs
++++ b/crates/matchbox-vm/src/vm/mod.rs
+@@ -341,6 +341,10 @@ pub struct BxFiber {
+     pub yield_requested: bool,
+     pub priority: u8,
+     pub root_stack: Vec<BxValue>,
++    /// When set, the fiber is waiting for an async operation to complete.
++    /// The call_method_value loop breaks instead of spinning, allowing
++    /// the caller to handle the async operation and resume later.
++    pub async_waiting: Option<u64>,
+ }
+ 
+ enum NativeCompletion {
+@@ -434,6 +438,12 @@ impl BxVM for VM {
+         }
+     }
+ 
++    fn set_async_waiting(&mut self, async_id: u64) {
++        if let Some(idx) = self.current_fiber_idx {
++            self.fibers[idx].async_waiting = Some(async_id);
++        }
++    }
++
+     fn sleep(&mut self, ms: u64) {
+         if let Some(idx) = self.current_fiber_idx {
+             let until = Instant::now() + Duration::from_millis(ms);
+@@ -958,6 +968,7 @@ impl VM {
+             future_id,
+             wait_until: None,
+             yield_requested: false,
++            async_waiting: None,
+             priority,
+             root_stack: Vec::new(),
+         };
+@@ -1526,6 +1537,7 @@ impl VM {
+             future_id,
+             wait_until: None,
+             yield_requested: false,
++            async_waiting: None,
+             priority: 0,
+             root_stack: Vec::new(),
+         };
+@@ -1679,6 +1691,7 @@ impl VM {
+             future_id,
+             wait_until: None,
+             yield_requested: false,
++            async_waiting: None,
+             priority,
+             root_stack: Vec::new(),
+         };
+@@ -4245,6 +4258,7 @@ impl VM {
+                         future_id,
+                         wait_until: None,
+                         yield_requested: false,
++                        async_waiting: None,
+                         priority: 0,
+                         root_stack: Vec::new(),
+                     };
+@@ -4254,12 +4268,17 @@ impl VM {
+                     let result = loop {
+                         match self.run_fiber(fiber_idx, Some(Instant::now() + Duration::from_millis(2))) {
+                             Ok(Some(val)) => break Ok(val),
+-                            Ok(None) => continue,
++                            Ok(None) => {
++                                if self.fibers[fiber_idx].async_waiting.is_some() || self.fibers[fiber_idx].yield_requested {
++                                    self.fibers[fiber_idx].yield_requested = false;
++                                    break Ok(BxValue::new_null());
++                                }
++                                continue;
++                            }
+                             Err(e) => break Err(e),
+                         }
+                     };
+                     self.current_fiber_idx = None;
+-                    let _ = self.fibers.pop();
+                     result
+                 } else {
+                     anyhow::bail!("Method {} not found on instance", name)
+@@ -4329,6 +4348,7 @@ impl VM {
+             future_id,
+             wait_until: None,
+             yield_requested: false,
++            async_waiting: None,
+             priority: 0,
+             root_stack: Vec::new(),
+         };
