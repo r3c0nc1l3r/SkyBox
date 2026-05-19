@@ -276,13 +276,19 @@ export default {
                     appId: env.VOWEL_APP_ID || '',
                 },
                 ai: {
-                    model: 'deepseek/deepseek-v4-flash:free',
+                    model: 'google/gemma-4-26b-a4b-it:free',
                 },
+                turnstileSiteKey: env.TURNSTILE_SITE_KEY || '',
             }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' } });
         }
 
         // SSE endpoint: route to DO
         if (path === '/events') {
+            const token = url.searchParams.get('turnstile_token') || '';
+            if (env.TURNSTILE_SECRET_KEY && token) {
+                const valid = await validateTurnstile(env.TURNSTILE_SECRET_KEY, token, request.headers.get('CF-Connecting-IP') || '');
+                if (!valid) return new Response('Forbidden: bot detected', { status: 403 });
+            }
             const doId = env.WEBSOCKET_DO.idFromName('default');
             const stub = env.WEBSOCKET_DO.get(doId);
             return stub.fetch(request);
@@ -290,6 +296,11 @@ export default {
 
         // WebSocket upgrade: route to DO
         if (request.headers.get('Upgrade') === 'websocket') {
+            const token = url.searchParams.get('turnstile_token') || '';
+            if (env.TURNSTILE_SECRET_KEY && token) {
+                const valid = await validateTurnstile(env.TURNSTILE_SECRET_KEY, token, request.headers.get('CF-Connecting-IP') || '');
+                if (!valid) return new Response('Forbidden: bot detected', { status: 403 });
+            }
             const doId = env.WEBSOCKET_DO.idFromName('default');
             const stub = env.WEBSOCKET_DO.get(doId);
             return stub.fetch(request);
@@ -599,6 +610,26 @@ async function handleSeed(env) {
     }
 }
 
+/**
+ * Validate a Turnstile token against Cloudflare's siteverify endpoint.
+ * Returns true if the token is valid, false otherwise.
+ */
+async function validateTurnstile(secret, token, ip) {
+    try {
+        const formData = new URLSearchParams({ secret, response: token });
+        if (ip) formData.set('remoteip', ip);
+        const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await res.json();
+        return data.success === true;
+    } catch (err) {
+        console.error('Turnstile validation error:', err);
+        return false;
+    }
+}
+
 function simpleHash(str) {
     let h = 0;
     for (let i = 0; i < str.length; i++) {
@@ -632,6 +663,7 @@ export class MatchBoxWebSocketDO {
         this.nextAsyncOpId = 1;
         this.sseStreams = new Map();
         this.chatHistories = new Map();
+        this.aiRateLimitMap = new Map(); // connectionId -> { count, windowStart }
         this.ctx.blockConcurrencyWhile(async () => {
             await this.initWasm();
             await this.restoreState();
@@ -916,7 +948,9 @@ export class MatchBoxWebSocketDO {
         if (typeof message === 'string' && message.startsWith('chat ')) {
             const prompt = message.slice(5).trim();
             if (prompt) {
-                await this.handleChatRAG(connectionId, prompt);
+                this.handleChatRAG(connectionId, prompt).catch(err => {
+                    console.error('handleChatRAG error:', err.message, err.stack);
+                });
             }
             return;
         }
@@ -964,6 +998,21 @@ export class MatchBoxWebSocketDO {
     }
 
     async handleChatRAG(connectionId, prompt) {
+        // In-memory rate limit: 10 AI calls per 60 seconds per connection (free abuse prevention)
+        const now = Date.now();
+        let rl = this.aiRateLimitMap.get(connectionId);
+        if (!rl || now - rl.windowStart > 60000) {
+            rl = { count: 0, windowStart: now };
+            this.aiRateLimitMap.set(connectionId, rl);
+        }
+        rl.count++;
+        if (rl.count > 10) {
+            this.sseSend(connectionId, 'app_error', { type: 'app_error', body: 'Rate limit exceeded. Please wait before sending more messages.' });
+            this.sseSend(connectionId, 'ai_done', { type: 'ai_done' });
+            console.log(`Rate limited connection ${connectionId}: ${rl.count} calls in window`);
+            return;
+        }
+
         if (!this.chatHistories.has(connectionId)) {
             this.chatHistories.set(connectionId, []);
         }
@@ -1010,7 +1059,7 @@ export class MatchBoxWebSocketDO {
             return;
         }
 
-        await this.streamOpenRouter(connectionId, JSON.stringify(messages), 'deepseek/deepseek-v4-flash:free', apiKey);
+        await this.streamOpenRouter(connectionId, JSON.stringify(messages), 'google/gemma-4-26b-a4b-it:free', apiKey);
 
         history.push({ role: 'assistant', content: '' });
         if (history.length > 40) {
@@ -1063,6 +1112,9 @@ export class MatchBoxWebSocketDO {
     async webSocketClose(ws, code, reason, wasClean) {
         const att = ws.deserializeAttachment();
         if (!att) return;
+
+        this.aiRateLimitMap.delete(att.id);
+        this.chatHistories.delete(att.id);
 
         currentDO = this;
         try {
@@ -1325,7 +1377,7 @@ export class MatchBoxWebSocketDO {
         const apiKey = binding;
         const connectionId = msg.args.connection_id;
         const messages = msg.args.messages;
-        const model = msg.args.model || 'deepseek/deepseek-v4-flash:free';
+        const model = msg.args.model || 'google/gemma-4-26b-a4b-it:free';
         const self = this;
 
         if (!apiKey) {

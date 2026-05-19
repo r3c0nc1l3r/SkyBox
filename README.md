@@ -35,7 +35,14 @@ vendor/matchbox/         # MatchBox BoxLang runtime (submodule)
 docs/                    # Documentation site (Astro/Starlight)
 ```
 
-## Available Demos
+## Live Demos
+
+| Demo | URL |
+|------|-----|
+| BoxDox (BoxLang Docs) | [skybox-boxdox.codetek.us](https://skybox-boxdox.codetek.us) |
+| SkyChat | [skybox-skychat.codetek.us](https://skybox-skychat.codetek.us) |
+
+### Source Demos (in `crates/matchbox-cf-worker/examples/`)
 
 echo, counter, chatroom, moonphase, romannumeral, jsonfmt, textanalyzer, todo
 

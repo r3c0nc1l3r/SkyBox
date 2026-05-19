@@ -16,6 +16,12 @@ index_name = "skybox-boxdox-vectors"
 binding = "DOCS_BUCKET"
 bucket_name = "skybox-boxdox-content"
 
+workers_dev = true
+
+routes = [
+  { pattern = "skybox-boxdox.codetek.us/*", zone_name = "codetek.us" }
+]
+
 [[durable_objects.bindings]]
 name = "WEBSOCKET_DO"
 class_name = "MatchBoxWebSocketDO"

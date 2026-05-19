@@ -12,6 +12,12 @@ database_id = "2b4ffffc-e74d-42e1-95fa-14c97e697a30"
 binding = "VECTORIZE"
 index_name = "skybox-skychat-vectors"
 
+workers_dev = true
+
+routes = [
+  { pattern = "skybox-skychat.codetek.us/*", zone_name = "codetek.us" }
+]
+
 [[durable_objects.bindings]]
 name = "WEBSOCKET_DO"
 class_name = "MatchBoxWebSocketDO"

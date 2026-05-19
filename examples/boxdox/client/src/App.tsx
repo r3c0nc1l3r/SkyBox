@@ -9,6 +9,17 @@ interface NavItem {
 
 interface ChatMsg { role: string; content: string }
 
+interface TurnstileObject {
+  render: (container: string | HTMLElement, options: {
+    sitekey: string;
+    callback: (token: string) => void;
+    'expired-callback'?: () => void;
+    theme?: string;
+  }) => string;
+  reset: (widgetId: string) => void;
+  getResponse: (widgetId: string) => string | undefined;
+}
+
 interface RagLogEntry {
   timestamp: string
   query: string
@@ -22,6 +33,9 @@ interface SearchResult {
 interface RagDoc { title: string; source: string; chunkCount?: number }
 
 let cid = crypto.randomUUID()
+let turnstileSiteKey: string | null = null
+let turnstileWidgetId: string | null = null
+let turnstileToken: string | null = null
 
 function esc(s: string) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
@@ -84,8 +98,13 @@ export default function App() {
   const chatSendDisabledRef = useRef(false)
   const chatMsgsRef = useRef<HTMLDivElement | null>(null)
 
-  const wsUrl = (location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + "/events?cid=" + cid
-  const sseUrl = (location.protocol === "https:" ? "https:" : "http:") + "//" + location.host + "/events?cid=" + cid
+  function connectUrls(token: string) {
+    const tokenParam = '&turnstile_token=' + encodeURIComponent(token)
+    return {
+      ws: (location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + "/events?cid=" + cid + tokenParam,
+      sse: (location.protocol === "https:" ? "https:" : "http:") + "//" + location.host + "/events?cid=" + cid + tokenParam,
+    }
+  }
 
   const addChatMsg = useCallback((role: string, content: string) => {
     setChatMsgs(prev => [...prev, { role, content }])
@@ -112,53 +131,132 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const es = new EventSource(sseUrl)
-    esRef.current = es
+    let cancelled = false
+    let turnstileRetries = 0
+    const MAX_RETRIES = 20
 
-    es.addEventListener('user_msg', (e: MessageEvent) => {
-      const m = JSON.parse(e.data)
-      addChatMsg('user', m.content)
-    })
-    es.addEventListener('ai_start', () => startAiBubble())
-    es.addEventListener('ai_chunk', (e: MessageEvent) => {
-      const m = JSON.parse(e.data)
-      appendAiChunk(m.content)
-    })
-    es.addEventListener('ai_done', () => finishAiBubble())
-    es.addEventListener('rag_debug', (e: MessageEvent) => {
+    async function setupTurnstileAndConnect() {
+      // 1. Fetch site key from config
       try {
-        const m = JSON.parse(e.data)
-        if (m.chunks) {
-          setRagLogs(prev => [{ timestamp: new Date().toLocaleTimeString(), query: m.query || '', chunks: m.chunks }, ...prev].slice(0, 50))
-        }
+        const cfg = await fetch('/api/config').then(r => r.json())
+        turnstileSiteKey = cfg?.turnstileSiteKey || ''
       } catch {}
-    })
-    es.addEventListener('error', (e: MessageEvent) => {
-      if (e.data) {
-        try { const m = JSON.parse(e.data); addChatMsg('system', m.body) } catch {}
+      if (!turnstileSiteKey) {
+        console.warn('[turnstile] No site key configured — connecting without Turnstile')
+        connectWithToken('')
+        return
       }
-      finishAiBubble()
-    })
-    es.addEventListener('open', () => {
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
-      ws.onopen = () => {
-        setConnected(true)
-        const ping = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) ws.send('__ping__')
-        }, 25000)
-        ws.onclose = () => {
-          setConnected(false)
-          clearInterval(ping)
+
+      // 2. Load Turnstile API script
+      if (!(window as any).turnstile) {
+        const script = document.createElement('script')
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=_turnstileOnLoad&render=explicit'
+        script.async = true
+        script.defer = true
+        document.head.appendChild(script)
+      }
+
+      // 3. Wait for Turnstile to be ready (polling fallback)
+      await new Promise<void>((resolve) => {
+        if ((window as any).turnstile) { resolve(); return }
+        ;(window as any)._turnstileOnLoad = () => resolve()
+        const poll = setInterval(() => {
+          if ((window as any).turnstile) { clearInterval(poll); resolve() }
+        }, 200)
+      })
+
+      if (cancelled) return
+
+      // 4. Render invisible widget
+      await obtainTurnstileToken()
+    }
+
+    async function obtainTurnstileToken() {
+      const tw = (window as any).turnstile as TurnstileObject
+      if (!tw) return
+
+      const container = document.getElementById('turnstile-container')
+      if (!container) return
+
+      turnstileWidgetId = tw.render(container, {
+        sitekey: turnstileSiteKey!,
+        callback: (token) => {
+          turnstileToken = token
+          connectWithToken(token)
+        },
+        'expired-callback': () => {
+          turnstileToken = null
+          tw.reset(turnstileWidgetId!)
+          if (turnstileRetries < MAX_RETRIES) {
+            turnstileRetries++
+            setTimeout(obtainTurnstileToken, 1000)
+          }
+        },
+        theme: 'dark',
+      })
+    }
+
+    function connectWithToken(token: string) {
+      if (cancelled) return
+      const urls = connectUrls(token)
+
+      const es = new EventSource(urls.sse)
+      esRef.current = es
+
+      es.addEventListener('user_msg', (e: MessageEvent) => {
+        const m = JSON.parse(e.data)
+        addChatMsg('user', m.content)
+      })
+      es.addEventListener('ai_start', () => startAiBubble())
+      es.addEventListener('ai_chunk', (e: MessageEvent) => {
+        const m = JSON.parse(e.data)
+        appendAiChunk(m.content)
+      })
+      es.addEventListener('ai_done', () => finishAiBubble())
+      es.addEventListener('rag_debug', (e: MessageEvent) => {
+        try {
+          const m = JSON.parse(e.data)
+          if (m.chunks) {
+            setRagLogs(prev => [{ timestamp: new Date().toLocaleTimeString(), query: m.query || '', chunks: m.chunks }, ...prev].slice(0, 50))
+          }
+        } catch {}
+      })
+      es.addEventListener('app_error', (e: MessageEvent) => {
+        if (e.data) {
+          try { const m = JSON.parse(e.data); addChatMsg('system', m.body) } catch {}
         }
-      }
-      ws.onmessage = (e) => {
-        if (e.data === '__pong__') return
-      }
-    })
+        finishAiBubble()
+      })
+      es.addEventListener('error', (e: MessageEvent) => {
+        if (e.data) {
+          try { const m = JSON.parse(e.data); addChatMsg('system', m.body) } catch {}
+        }
+        finishAiBubble()
+      })
+      es.addEventListener('open', () => {
+        const ws = new WebSocket(urls.ws)
+        wsRef.current = ws
+        ws.onopen = () => {
+          setConnected(true)
+          const ping = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) ws.send('__ping__')
+          }, 25000)
+          ws.onclose = () => {
+            setConnected(false)
+            clearInterval(ping)
+          }
+        }
+        ws.onmessage = (e) => {
+          if (e.data === '__pong__') return
+        }
+      })
+    }
+
+    setupTurnstileAndConnect()
 
     return () => {
-      es.close()
+      cancelled = true
+      esRef.current?.close()
       wsRef.current?.close()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -352,6 +450,7 @@ export default function App() {
 
       <RagDebugPanel ragLogs={ragLogs} />
       <VowelAgent />
+      <div id="turnstile-container" style={{ position: 'fixed', bottom: 0, right: 0, width: 0, height: 0, overflow: 'hidden', opacity: 0, zIndex: -1 }} />
     </>
   )
 }
@@ -564,7 +663,7 @@ function VowelAgent() {
             provider: 'vowel-prime',
             vowelPrimeConfig: { environment: 'testing' },
             llmProvider: 'openrouter',
-            model: 'deepseek/deepseek-v4-flash:free',
+            model: 'google/gemma-4-26b-a4b-it:free',
             stt: { provider: 'groq-whisper' },
             tts: { provider: 'grok' },
             voice: 'ara',
