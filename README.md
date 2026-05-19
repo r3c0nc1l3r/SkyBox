@@ -15,22 +15,22 @@ BoxLang on Cloudflare Workers — compile [BoxLang](https://boxlang.io) `.bx` so
 
 ```mermaid
 flowchart TB
-    subgraph Cloudflare[Cloudflare Edge]
-        CF[Cloudflare Workers\nfetch() handler]
-        ASSETS[Static Assets\ndist/assets/]
+    subgraph Cloudflare["Cloudflare Edge"]
+        CF["Cloudflare Workers<br/>fetch() handler"]
+        ASSETS["Static Assets<br/>dist/assets/"]
     end
 
-    subgraph DO[Durable Object: MatchBoxWebSocketDO]
-        VM[BoxLang VM\nwasm32-unknown-unknown]
-        L[Listener Instance\nYour .bx class]
-        CH[Channel API\nCfWebSocketChannelObject]
-        STATE["variables.* state\nDO Storage (SQLite)"]
-        BIFS[WASM BIFs\nstring ops, math, array]
+    subgraph DO["Durable Object: MatchBoxWebSocketDO"]
+        VM["BoxLang VM<br/>wasm32-unknown-unknown"]
+        L["Listener Instance<br/>Your .bx class"]
+        CH["Channel API<br/>CfWebSocketChannelObject"]
+        STATE["variables.* state<br/>DO Storage (SQLite)"]
+        BIFS["WASM BIFs<br/>string ops, math, array"]
 
-        subgraph Binding[Binding Call Bridge]
-            D1[D1 Database\nCloudflare SQLite]
-            VEC[Vectorize\nVector Database]
-            AI[Workers AI\nEmbeddings + LLM]
+        subgraph Binding["Binding Call Bridge"]
+            D1["D1 Database<br/>Cloudflare SQLite"]
+            VEC["Vectorize<br/>Vector Database"]
+            AI["Workers AI<br/>Embeddings + LLM"]
         end
 
         VM --> L
@@ -42,10 +42,10 @@ flowchart TB
         BIFS -.-> AI
     end
 
-    subgraph Clients[Connected Clients]
-        WS1[WebSocket 1]
-        WS2[WebSocket 2]
-        WSN["WebSocket N\nup to 32,768"]
+    subgraph Clients["Connected Clients"]
+        WS1["WebSocket 1"]
+        WS2["WebSocket 2"]
+        WSN["WebSocket N<br/>up to 32,768"]
     end
 
     CF -->|WebSocket Upgrade| VM
@@ -60,14 +60,14 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    BX[BoxLang\n.bx source] --> COMP[boxlang_compiler\ncompiled to Chunk\n(postcard serialized)]
-    RUST[Rust crate\nmatchbox-cf-worker] --> CARGO[cargo build --target\nwasm32-unknown-unknown\n--release]
-    CARGO --> WB[wasm-bindgen\n--target web\nJS glue code]
-    WB --> BUILDER[cf-worker-builder CLI]
+    BX["BoxLang<br/>.bx source"] --> COMP["boxlang_compiler<br/>compiled to Chunk<br/>(postcard serialized)"]
+    RUST["Rust crate<br/>matchbox-cf-worker"] --> CARGO["cargo build --target<br/>wasm32-unknown-unknown<br/>--release"]
+    CARGO --> WB["wasm-bindgen<br/>--target web<br/>JS glue code"]
+    WB --> BUILDER["cf-worker-builder CLI"]
     COMP --> BUILDER
-    BUILDER -->|skybox:chunk custom section| WASM[dist/worker.wasm\nBoxLang VM + bytecode]
+    BUILDER -->|skybox:chunk custom section| WASM["dist/worker.wasm<br/>BoxLang VM + bytecode"]
     BUILDER -->|skybox:ws_config custom section| WASM
-    WB --> GLUE["wasm_glue.js\nJS <-> WASM bridge"]
+    WB --> GLUE["wasm_glue.js<br/>JS <-> WASM bridge"]
 
     style BX fill:#4a4a8a,stroke:#666,color:#fff
     style RUST fill:#4a4a8a,stroke:#666,color:#fff
