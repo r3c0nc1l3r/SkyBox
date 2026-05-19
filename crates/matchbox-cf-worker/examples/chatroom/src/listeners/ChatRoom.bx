@@ -1,0 +1,351 @@
+// ── ChatRoom — Multi-User WebSocket Chat ──────────────────────────
+// Protocol:
+//   Client sends:  /nick Bob
+//   Server sends:  {"type":"nick","nickname":"Bob"}
+//   Client sends:  /create myroom
+//   Server sends:  {"type":"room_created","room":"myroom"}
+//   Client sends:  /join myroom
+//   Server sends:  {"type":"room_joined","room":"myroom"}
+//   Client sends:  Hello everyone!
+//   Server sends:  {"type":"chat","user":"Bob","text":"...","room":"lobby"}
+
+class ChatRoom {
+
+    function onConnect(required channel) {
+        var userId = channel.getId();
+
+        variables.userCount = (variables.userCount ?: 0) + 1;
+
+        if (isNull(variables.users)) { variables.users = {}; }
+        if (isNull(variables.rooms)) { variables.rooms = {}; }
+        if (isNull(variables.rooms["lobby"])) { variables.rooms["lobby"] = []; }
+
+        variables.users[userId] = {
+            "id"       : userId,
+            "nickname" : "User" & variables.userCount,
+            "room"     : "lobby",
+            "joined"   : now()
+        };
+
+        arrayAppend(variables.rooms["lobby"], userId);
+
+        channel.sendJson({
+            "type"     : "welcome",
+            "userId"   : userId,
+            "nickname" : variables.users[userId].nickname,
+            "room"     : "lobby",
+            "users"    : buildRoomUserList("lobby"),
+            "rooms"    : buildRoomList()
+        });
+
+        broadcastToRoom("lobby", {
+            "type" : "join",
+            "user" : variables.users[userId].nickname
+        }, channel);
+    }
+
+    function onMessage(required message, required channel) {
+        var userId = channel.getId();
+
+        variables.users = (variables.users ?: {});
+        if (isNull(variables.users[userId])) {
+            variables.users[userId] = { "id": userId, "nickname": "User", "room": "lobby" };
+        }
+
+        if (mid(message, 1, 1) == "/") {
+            handleCommand(userId, message, channel);
+        } else {
+            handleChat(userId, message, channel);
+        }
+    }
+
+    function onClose(required channel) {
+        var userId = channel.getId();
+
+        variables.users   = (variables.users ?: {});
+        variables.rooms   = (variables.rooms ?: {});
+        variables.userCount = max((variables.userCount ?: 1) - 1, 0);
+
+        var userInfo = variables.users[userId] ?: { "nickname" : "Unknown", "room" : "lobby" };
+        var roomName = userInfo.room;
+
+        if (!isNull(variables.rooms[roomName])) {
+            var idx = 1;
+            while (idx <= arrayLen(variables.rooms[roomName])) {
+                if (variables.rooms[roomName][idx] == userId) {
+                    arrayDeleteAt(variables.rooms[roomName], idx);
+                    break;
+                }
+                idx = idx + 1;
+            }
+        }
+
+        structDelete(variables.users, userId);
+
+        // Broadcast leave + updated room list to everyone
+        channel.broadcastJson({
+            "type"  : "leave",
+            "user"  : userInfo.nickname,
+            "rooms" : buildRoomList()
+        });
+    }
+
+    private function handleCommand(required string userId, required string message, required channel) {
+        var spacePos = stringFind(" ", message);
+        if (spacePos == 0) { spacePos = len(message) + 1; }
+        var cmd = lcase(mid(message, 2, spacePos - 2));
+        var args = "";
+        if (spacePos <= len(message)) {
+            args = trim(mid(message, spacePos + 1, len(message) - spacePos));
+        }
+
+        if (cmd == "nick") {
+            handleNick(userId, args, channel);
+        } else if (cmd == "create") {
+            handleCreate(userId, args, channel);
+        } else if (cmd == "join") {
+            handleJoin(userId, args, channel);
+        } else {
+            channel.sendJson({ "type" : "error", "text" : "Unknown command: /" & cmd });
+        }
+    }
+
+    private function handleNick(required string userId, required string newNick, required channel) {
+        variables.users = (variables.users ?: {});
+        variables.users[userId] = variables.users[userId] ?: { "nickname" : "User", "room" : "lobby" };
+
+        var oldNick = variables.users[userId].nickname;
+        if (len(trim(newNick)) == 0) {
+            channel.sendJson({ "type" : "error", "text" : "Usage: /nick <name>" });
+            return;
+        }
+        if (len(newNick) > 20) {
+            newNick = mid(newNick, 1, 20);
+        }
+
+        variables.users[userId].nickname = newNick;
+
+        channel.sendJson({ "type" : "nick", "nickname" : newNick });
+        channel.broadcastJson({ "type" : "notice", "text" : oldNick & " is now known as " & newNick });
+    }
+
+    private function handleCreate(required string userId, required string roomName, required channel) {
+        variables.rooms = (variables.rooms ?: {});
+
+        if (len(trim(roomName)) == 0) {
+            channel.sendJson({ "type" : "error", "text" : "Usage: /create <room>" });
+            return;
+        }
+
+        roomName = trim(lcase(roomName));
+        if (!isNull(variables.rooms[roomName])) {
+            channel.sendJson({ "type" : "error", "text" : "Room '" & roomName & "' already exists" });
+            return;
+        }
+
+        variables.rooms[roomName] = [];
+
+        channel.sendJson({ "type" : "room_created", "room" : roomName });
+        channel.broadcastJson({ "type" : "rooms_updated", "rooms" : buildRoomList() });
+
+        handleJoin(userId, roomName, channel);
+    }
+
+    private function handleJoin(required string userId, required string roomName, required channel) {
+        variables.users = (variables.users ?: {});
+        variables.rooms = (variables.rooms ?: {});
+
+        if (len(trim(roomName)) == 0) {
+            channel.sendJson({ "type" : "error", "text" : "Usage: /join <room>" });
+            return;
+        }
+
+        var userInfo = variables.users[userId] ?: { "nickname" : "User", "room" : "lobby" };
+        var oldRoom = userInfo.room;
+
+        if (oldRoom == roomName) {
+            channel.sendJson({ "type" : "error", "text" : "Already in " & roomName });
+            return;
+        }
+
+        // Leave old room
+        if (!isNull(variables.rooms[oldRoom])) {
+            var idx = 1;
+            var found = false;
+            while (idx <= arrayLen(variables.rooms[oldRoom])) {
+                if (variables.rooms[oldRoom][idx] == userId) {
+                    arrayDeleteAt(variables.rooms[oldRoom], idx);
+                    found = true;
+                    break;
+                }
+                idx = idx + 1;
+            }
+            if (found) {
+                channel.broadcastJson({ "type" : "notice", "text" : userInfo.nickname & " left " & oldRoom });
+            }
+        }
+
+        if (isNull(variables.rooms[roomName])) {
+            channel.sendJson({ "type" : "error", "text" : "Room '" & roomName & "' not found" });
+            return;
+        }
+
+        arrayAppend(variables.rooms[roomName], userId);
+        userInfo.room = roomName;
+        variables.users[userId] = userInfo;
+
+        channel.sendJson({
+            "type"  : "room_joined",
+            "room"  : roomName,
+            "users" : buildRoomUserList(roomName)
+        });
+        channel.broadcastJson({ "type" : "notice", "text" : userInfo.nickname & " joined " & roomName });
+        channel.broadcastJson({ "type" : "rooms_updated", "rooms" : buildRoomList() });
+    }
+
+    private function handleChat(required string userId, required string text, required channel) {
+        variables.users = (variables.users ?: {});
+        variables.messages = (variables.messages ?: []);
+
+        var userInfo = variables.users[userId] ?: { "nickname" : "Anonymous", "room" : "lobby" };
+
+        var chatMsg = {
+            "type"      : "chat",
+            "user"      : userInfo.nickname,
+            "text"      : mid(text, 1, 1024),
+            "room"      : userInfo.room
+        };
+        arrayAppend(variables.messages, chatMsg);
+        if (arrayLen(variables.messages) > 50) {
+            arrayDeleteAt(variables.messages, 1);
+        }
+
+        channel.broadcastJson(chatMsg);
+    }
+
+    private function buildRoomUserList(required string roomName) {
+        variables.users = (variables.users ?: {});
+        variables.rooms = (variables.rooms ?: {});
+        var members = variables.rooms[roomName] ?: [];
+        var list = [];
+        for (var uid in members) {
+            var u = variables.users[uid] ?: { "nickname" : "?" };
+            arrayAppend(list, u.nickname);
+        }
+        return list;
+    }
+
+    private function buildRoomList() {
+        variables.rooms = (variables.rooms ?: {});
+        var list = [];
+        for (var r in variables.rooms) {
+            arrayAppend(list, { "name" : r, "users" : arrayLen(variables.rooms[r]) });
+        }
+        return list;
+    }
+
+    private function stringFind(required string needle, required string haystack) {
+        var needleLen = len(needle);
+        var maxPos = len(haystack) - needleLen + 1;
+        for (var i = 1; i <= maxPos; i = i + 1) {
+            if (mid(haystack, i, needleLen) == needle) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    private function broadcastToRoom(required string roomName, required struct message, channel) {
+        variables.rooms = (variables.rooms ?: {});
+        channel.broadcastJson(message);
+    }
+
+    function onHttpGet(required struct request) {
+        if (request.path == "/") {
+            return {
+                "status" : 200,
+                "headers" : { "Content-Type" : "text/html; charset=utf-8" },
+                "body" : renderChatPage()
+            };
+        }
+        return {
+            "status" : 404,
+            "headers" : { "Content-Type" : "text/plain" },
+            "body" : "Not Found"
+        };
+    }
+
+    private function renderChatPage() {
+        var html = '<!DOCTYPE html>';
+        html = html & '<html lang="en">';
+        html = html & '<head>';
+        html = html & '<meta charset="UTF-8">';
+        html = html & '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+        html = html & '<title>SkyBox Chat</title>';
+        html = html & '<script src="https://cdn.tailwindcss.com"></script>';
+        html = html & '</head>';
+        html = html & '<body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden font-sans antialiased">';
+
+        // Top bar
+        html = html & '<header class="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0">';
+        html = html & '  <div class="flex items-center gap-3">';
+        html = html & '    <h1 class="text-lg font-bold text-cyan-400">SkyBox Chat</h1>';
+        html = html & '    <span id="statusBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-800 text-gray-400"><span id="statusDot" class="w-2 h-2 rounded-full bg-gray-600"></span><span id="statusText">Disconnected</span></span>';
+        html = html & '  </div>';
+        html = html & '  <div class="flex items-center gap-2">';
+        html = html & '    <input id="nickInput" type="text" maxlength="20" placeholder="Set nickname..." class="w-36 px-2 py-1 text-sm rounded bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500">';
+        html = html & '    <button id="nickBtn" class="px-2 py-1 text-xs font-medium rounded bg-cyan-700 hover:bg-cyan-600 text-white transition-colors">Set</button>';
+        html = html & '  </div>';
+        html = html & '</header>';
+
+        // Main layout: rooms | chat | users
+        html = html & '<div class="flex flex-1 overflow-hidden">';
+
+        // Left sidebar — rooms
+        html = html & '  <aside class="w-56 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">';
+        html = html & '    <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800">';
+        html = html & '      <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Rooms</h2>';
+        html = html & '      <button id="createRoomBtn" class="text-cyan-400 hover:text-cyan-300 text-sm font-bold leading-none px-1" title="Create room">+</button>';
+        html = html & '    </div>';
+        html = html & '    <div id="roomList" class="flex-1 overflow-y-auto p-2 space-y-1"></div>';
+        html = html & '  </aside>';
+
+        // Center — chat area
+        html = html & '  <main class="flex-1 flex flex-col min-w-0">';
+        html = html & '    <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-800 shrink-0">Room: <span id="currentRoom" class="text-cyan-400 font-semibold">lobby</span></div>';
+        html = html & '    <div id="messages" class="flex-1 overflow-y-auto px-4 py-3 space-y-1.5"></div>';
+        html = html & '    <div class="px-4 py-3 border-t border-gray-800 shrink-0">';
+        html = html & '      <form id="chatForm" class="flex gap-2">';
+        html = html & '        <input id="msgInput" type="text" placeholder="Type a message..." autofocus class="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 text-sm">';
+        html = html & '        <button type="submit" class="px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-sm font-medium transition-colors">Send</button>';
+        html = html & '      </form>';
+        html = html & '    </div>';
+        html = html & '  </main>';
+
+        // Right sidebar — users
+        html = html & '  <aside class="w-48 bg-gray-900 border-l border-gray-800 flex flex-col shrink-0">';
+        html = html & '    <div class="px-3 py-2 border-b border-gray-800">';
+        html = html & '      <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Users <span id="userCount" class="text-gray-600 font-normal">(0)</span></h2>';
+        html = html & '    </div>';
+        html = html & '    <ul id="userList" class="flex-1 overflow-y-auto p-2 space-y-1"></ul>';
+        html = html & '  </aside>';
+
+        html = html & '</div>';
+
+        // Create room modal (hidden by default)
+        html = html & '<div id="createModal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50">';
+        html = html & '  <div class="bg-gray-900 rounded-xl border border-gray-700 p-6 w-80 shadow-2xl">';
+        html = html & '    <h3 class="text-lg font-semibold mb-4">Create Room</h3>';
+        html = html & '    <input id="newRoomInput" type="text" placeholder="Room name..." maxlength="30" class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 text-sm mb-4">';
+        html = html & '    <div class="flex gap-2 justify-end">';
+        html = html & '      <button id="cancelRoomBtn" class="px-3 py-1.5 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">Cancel</button>';
+        html = html & '      <button id="confirmRoomBtn" class="px-3 py-1.5 text-sm rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white transition-colors">Create</button>';
+        html = html & '    </div>';
+        html = html & '  </div>';
+        html = html & '</div>';
+
+        html = html & '<script src="/js/chat.js"></script>';
+        html = html & '</body></html>';
+        return html;
+    }
+}

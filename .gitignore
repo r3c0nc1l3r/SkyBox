@@ -8,3 +8,10 @@ node_modules/
 .dolt/
 *.db
 .beads-credential-key
+.dev.vars*
+.env*
+*.local
+
+.wrangler
+
+bindgen

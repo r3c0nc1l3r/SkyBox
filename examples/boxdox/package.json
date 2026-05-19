@@ -1,0 +1,20 @@
+{
+    "name": "skybox-boxdox",
+    "version": "0.2.0",
+    "private": true,
+    "scripts": {
+        "build": "bash build-multi.sh",
+        "dev": "npm run build && wrangler dev --local",
+        "deploy": "npm run build && wrangler deploy",
+        "upload-content": "bash upload-content.sh --execute",
+        "upload-content:dry-run": "bash upload-content.sh"
+    },
+    "devDependencies": {
+        "wrangler": "^4.0.0"
+    },
+    "dependencies": {
+        "@vowel.to/client": "^0.4.1-beta",
+        "esbuild": "^0.28.0",
+        "ws": "^8.20.1"
+    }
+}
