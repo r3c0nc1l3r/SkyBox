@@ -1,9 +1,20 @@
 ---
 title: Demo Applications
-description: Overview of all 8 demo applications with test results.
+description: Overview of all source demos and production examples with test results.
 ---
 
-All demos are built and tested end-to-end under workerd. Each has automated tests in its directory.
+## Production Deployments
+
+These examples are deployed live at `*.codetek.us`:
+
+| Demo | URL | Stack |
+|------|-----|-------|
+| **BoxDox** | [skybox-boxdox.codetek.us](https://skybox-boxdox.codetek.us) | BoxLang + React SPA + D1 + Vectorize + Workers AI + R2 + SSE |
+| **SkyChat** | [skybox-skychat.codetek.us](https://skybox-skychat.codetek.us) | BoxLang + OpenRouter + Vectorize + D1 + SSE |
+
+## Source Demos
+
+All source demos are built and tested end-to-end under workerd. Each has automated tests in its directory.
 
 | Demo | Description | Commands | Status |
 |------|-------------|----------|--------|
@@ -16,7 +27,7 @@ All demos are built and tested end-to-end under workerd. Each has automated test
 | **Text Analyzer** | Word/sentence analysis | `analyze TEXT`, `words TEXT` | ✅ |
 | **Todo List** | Collaborative todo list | `add task`, `done 1`, `del 1`, `list`, `clear` | ✅ |
 
-All 7 automated tests pass:
+All automated tests pass:
 ```
 counter:     OK: all infra tests passed
 chatroom:    OK: state keys=messages,room,usercount,users

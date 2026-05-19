@@ -178,6 +178,46 @@ accrues until the next message arrives.
 Broadcast iterates `ctx.getWebSockets()`, the native DO way to
 find all connected WebSockets.
 
+### Async Pause/Resume Cycle
+Since the BoxLang VM runs synchronously on WASM but needs to call async
+Cloudflare APIs (D1, Vectorize, Workers AI), the system uses a pause/resume
+cycle:
+
+```
+BoxLang BIF call → VM yields {__paused__: true, ops: [{async_id, ...}]}
+                → JS shell awaits the promise
+                → vm_complete_async(JSON.stringify(results)) resumes VM
+                → VM continues with the async result
+```
+
+This is handled in `mcf-worker.js` for `onConnect`, `onMessage`, and
+`onHttpGet` — each method has a `while (result.__paused__ && result.ops)`
+loop that resolves pending async operations and resumes the VM.
+
+### Binding Call Dispatch
+Cloudflare-specific BIFs (`d1Query`, `d1Execute`, `mxaiEmbed`,
+`mxaiVectorizeUpsert`, `mxaiVectorizeQuery`, `openRouterChat`,
+`tursoQuery`, `tursoExecute`) are routed through a single
+`__skybox_binding_call` global handler. The DO's `handleBindingCall()`
+dispatches to the appropriate Cloudflare binding based on the `action`
+field. Async operations return a Promise stored in `pendingAsyncOps` by
+`async_id`, which the pause/resume loop resolves.
+
+### SSE Architecture
+The JS shell supports two SSE stream patterns:
+
+1. **Module-level SSE streams** (default in `shell/mcf-worker.js`):
+   A `globalSSEStreams` Map at module scope is shared between the Worker
+   entry point and DO callouts. In workerd, the Worker and DO share the
+   module scope, so both can access the same Map.
+
+2. **DO-level SSE streams** (used in production examples like boxdox):
+   SSE streams live on `this.sseStreams` inside the DO instance. The
+   `__skybox_send` callout first tries SSE, then falls back to WebSocket.
+
+Both patterns use the EventSource protocol (`text/event-stream`) with
+custom event types (e.g., `ai_chunk`, `user_msg`, `rag_debug`).
+
 ## Listener API
 
 ### Required methods
@@ -286,15 +326,91 @@ The following BIFs are **not available**:
 | Unavailable BIF | Alternative |
 |----------------|-------------|
 | `deserializeJSON` | Manual structural validation (see jsonfmt demo) |
-| `int(string)` | N/A — avoid string-to-int conversion |
-| `val(string)` | N/A — avoid string-to-number conversion |
+| `int(string)` | Compare as strings: `id & "" == "1" & ""` |
+| `val(string)` | Avoid string-to-number conversion |
 | `asc(char)` | Character comparison: `c >= "0" && c <= "9"` |
 | `chr(num)` | N/A |
 | `dateFormat`, `parseDateTime` | N/A |
 | `year`, `month`, `day` | N/A |
-| `pi`, `sin`, `abs` | Compute manually |
+| `pi`, `sin`, `abs` | Compute manually: `if (x < 0) x = 0 - x` |
 | `reReplace` | Manual character filtering (see textanalyzer demo) |
 | `replace` | Manual iteration (see textanalyzer demo) |
+
+## Variable Persistence
+
+Class-level `variables.xxx` state is shared across ALL WebSocket connections.
+State is persisted to DO storage after each `onMessage` call. On hibernation
+wake, state is restored via `$text{storage.get('listener_state')}`.
+
+**Important**: Class-level variable initialization does NOT persist across
+DO restarts on WASM. Always use the lazy-init pattern:
+
+```boxlang
+// DO this:
+variables.visits = (variables.visits ?: 0) + 1;
+
+// NOT this:
+variables.romanMap = {"I": 1, "V": 5};  // won't persist!
+```
+
+For initial state, use a `state.json` file in your example directory and
+pass it to the build script:
+
+```bash
+bash examples/build.sh examples/myapp examples/myapp/MyListener.bx MyListener \
+    "" examples/myapp/state.json
+```
+
+Example `state.json`:
+```json
+{"seeded": false, "docCount": 0}
+```
+
+## JS Shell: Key Patterns
+
+### Two-File Copy Issue
+
+There are two copies of `mcf-worker.js`:
+1. **Template**: `crates/matchbox-cf-worker/shell/mcf-worker.js` (canonical source)
+2. **Per-demo copy**: `examples/<demo>/mcf-worker.js` (used by wrangler)
+
+Always copy the template to the demo after editing:
+```bash
+cp -f crates/matchbox-cf-worker/shell/mcf-worker.js examples/<demo>/mcf-worker.js
+```
+
+For per-demo templates (like `crates/matchbox-cf-worker/examples/<demo>/mcf-worker.js`),
+copy to `examples/<demo>/mcf-worker.js`:
+```bash
+cp -f crates/matchbox-cf-worker/examples/<demo>/mcf-worker.js examples/<demo>/mcf-worker.js
+```
+
+### Wrangler v4 Deploy Flow
+
+In wrangler v4, `wrangler deploy` only uploads a new version but does NOT
+switch traffic. You must use versions:
+
+```bash
+npm run build
+npx wrangler versions upload
+npx wrangler versions deploy --version-id <id> --percentage 100
+```
+
+Use `npx wrangler versions list` to find available version IDs.
+
+### WASM Module Import
+
+Do NOT add `[wasm_modules]` to `wrangler.toml`. The WASM is imported
+natively via ES module import:
+
+```js
+import wasmModule from './worker.wasm';
+```
+
+On first `wrangler dev`, create a symlink so wrangler can resolve:
+```bash
+ln -sf dist/worker.wasm worker.wasm
+```
 
 ## Testing
 
@@ -323,6 +439,20 @@ const ws = new WebSocket('ws://localhost:8787/');
 ws.on('message', d => console.log(d.toString()));
 ws.on('open', () => ws.send('now'));
 "
+```
+
+### WebSocket Test Client
+
+```bash
+# Install wscat
+npm install -g wscat
+
+# Connect
+wscat -c ws://localhost:8787/ws
+
+# Send messages
+> hello
+< echo:hello
 ```
 
 ## Limits & Constraints

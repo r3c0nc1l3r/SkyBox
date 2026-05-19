@@ -79,3 +79,47 @@ function onHttpGet(required struct request) {
 ```
 
 CSS and JS should be served as external static assets via Cloudflare's `[assets]` feature rather than embedded as inline strings (which avoids `#` escaping and JS escaping issues). See the [chatroom demo](/demos/overview) for a full example.
+
+## Async Pause/Resume Cycle
+
+Since the BoxLang VM runs synchronously on WASM but needs to call async Cloudflare APIs (D1, Vectorize, Workers AI), the system uses a pause/resume cycle:
+
+```javascript
+// In mcf-worker.js (Durable Object)
+while (result.__paused__ && result.ops) {
+    const asyncResults = [];
+    for (const op of result.ops) {
+        const promise = this.pendingAsyncOps.get(op.async_id);
+        if (promise) {
+            this.pendingAsyncOps.delete(op.async_id);
+            try {
+                const data = await promise;
+                asyncResults.push({ async_id: op.async_id, data });
+            } catch (e) {
+                asyncResults.push({ async_id: op.async_id, data: null });
+            }
+        }
+    }
+    resultJson = vm_complete_async(JSON.stringify(asyncResults));
+    result = JSON.parse(resultJson);
+}
+```
+
+This cycle runs for `onConnect`, `onMessage`, and `onHttpGet`. Each iteration resolves pending async operations and resumes the VM with results.
+
+## Binding Call Bridge
+
+Cloudflare-specific operations are routed through a single `__skybox_binding_call` global handler. The DO dispatches based on action type:
+
+| Action | Handler | Backend |
+|--------|---------|---------|
+| `query` | `handleD1Query` | `env.DB.prepare(sql).bind(...).all()` |
+| `execute` | `handleD1Execute` | `env.DB.prepare(sql).bind(...).run()` |
+| `embed` | `handleEmbed` | `env.AI.run('@cf/baai/bge-small-en-v1.5', ...)` |
+| `vectorize_upsert` | `handleVectorizeUpsert` | `env.VECTORIZE.upsert(vectors)` |
+| `vectorize_query` | `handleVectorizeQuery` | `env.VECTORIZE.query(vector, options)` |
+| `openrouter` | `handleOpenRouter` | `fetch(openrouter.ai/api/v1/...)` |
+| `turso_query` | `handleTursoQuery` | `fetch(turso.url, {sql, params})` |
+| `turso_execute` | `handleTursoExecute` | `fetch(turso.url, {sql, params})` |
+
+Each action returns an `async_id` that the pause/resume cycle uses to match completed operations back to the waiting VM call. See the `mcf-worker.js` source for the full implementation.

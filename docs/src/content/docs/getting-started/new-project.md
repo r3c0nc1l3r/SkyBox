@@ -97,6 +97,22 @@ private function renderPage() {
 }
 ```
 
+## 7. Deploy
+
+```bash
+# Build the WASM
+npm run build
+
+# Upload version (wrangler v4+)
+npx wrangler versions upload
+
+# Switch traffic
+npx wrangler versions deploy --version-id <id> --percentage 100
+
+# Or use the shortcut (wrangler < v4):
+npx wrangler deploy
+```
+
 ## Required Files
 
 | File | Purpose |

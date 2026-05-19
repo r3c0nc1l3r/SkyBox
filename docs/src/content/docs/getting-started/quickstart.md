@@ -64,3 +64,13 @@ ws.send("Hello!");
 cd examples/myapp
 npx wrangler deploy
 ```
+
+:::note
+In wrangler v4+, `wrangler deploy` only uploads a new version but does NOT switch traffic. You must also run:
+
+```bash
+npx wrangler versions deploy --version-id <id> --percentage 100
+```
+
+Use `npx wrangler versions list` to find available version IDs.
+:::
