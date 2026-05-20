@@ -298,10 +298,10 @@ Always copy the template to the demo after editing:
 cp -f crates/matchbox-cf-worker/shell/mcf-worker.js examples/<demo>/mcf-worker.js
 ```
 
-For per-demo templates (like `crates/matchbox-cf-worker/examples/<demo>/mcf-worker.js`),
-copy to `examples/<demo>/mcf-worker.js`:
+For per-demo templates (like `examples/<demo>/mcf-worker.js`),
+copy the canonical template:
 ```bash
-cp -f crates/matchbox-cf-worker/examples/<demo>/mcf-worker.js examples/<demo>/mcf-worker.js
+cp -f crates/matchbox-cf-worker/shell/mcf-worker.js examples/<demo>/mcf-worker.js
 ```
 
 ### Dev flow

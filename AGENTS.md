@@ -403,7 +403,7 @@ agent-browser --session userB click @e1
 
 ```bash
 # Terminal 1: Start the app
-cd crates/matchbox-cf-worker/examples/chatroom
+cd examples/chatroom
 npm run dev
 
 # Terminal 2: Test with agent-browser  
@@ -481,7 +481,7 @@ reload
 - Templates are served from `templates/init/` relative to `modulePath`
 - The `skybox build` command wraps `examples/build.sh` from the SkyBox project
 - The `skybox dev` and `skybox deploy` commands assume wrangler is available via npx or local node_modules
-- The `skybox new` command copies from `crates/matchbox-cf-worker/examples/<demo>/` when inside the SkyBox repo, otherwise falls back to templates
+- The `skybox new` command copies from `examples/<demo>/` when inside the SkyBox repo, otherwise falls back to templates
 
 ## Session Completion
 

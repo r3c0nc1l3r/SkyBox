@@ -10,6 +10,12 @@ BoxLang on Cloudflare Workers — compile [BoxLang](https://boxlang.io) `.bx` so
 |------|-----|-------------|
 | **BoxDox** | [skybox-boxdox.codetek.us](https://skybox-boxdox.codetek.us) | BoxLang documentation viewer with AI chat and semantic search |
 | **SkyChat** | [skybox-skychat.codetek.us](https://skybox-skychat.codetek.us) | RAG-powered AI chat with OpenRouter |
+| **ChatRoom** | [skybox-chatroom.codetek.us](https://skybox-chatroom.codetek.us) | Multi-client chat room with Web UI |
+| **MoonPhase** | [skybox-moonphase.codetek.us](https://skybox-moonphase.codetek.us) | Moon phase calculator |
+| **Todo** | [skybox-todo.codetek.us](https://skybox-todo.codetek.us) | Collaborative todo list with REST API |
+| **RomanNumeral** | [skybox-romannumeral.codetek.us](https://skybox-romannumeral.codetek.us) | Roman numeral ↔ integer converter |
+| **JsonFmt** | [skybox-jsonfmt.codetek.us](https://skybox-jsonfmt.codetek.us) | JSON validator and formatter |
+| **TextAnalyzer** | [skybox-textanalyzer.codetek.us](https://skybox-textanalyzer.codetek.us) | Word/sentence frequency analyzer |
 
 ## Architecture
 
@@ -173,31 +179,19 @@ SkyBox/
 │   │   ├── shell/
 │   │   │   ├── mcf-worker.js      # Template: Worker entry point + DO class
 │   │   │   └── wrangler.toml      # Template: Cloudflare Worker config
-│   │   └── examples/
-│   │       ├── echo/              # Basic echo server (WebSocket)
-│   │       ├── counter/           # Stateful click counter (broadcast)
-│   │       ├── chatroom/          # Multi-client chat (Web UI + WebSocket)
-│   │       ├── moonphase/         # Moon phase calculator
-│   │       ├── romannumeral/      # Roman numeral converter
-│   │       ├── jsonfmt/           # JSON validator (manual parsing)
-│   │       ├── textanalyzer/      # Word/sentence frequency analyzer
-│   │       └── todo/              # Collaborative todo list (HTTP REST API)
-│   │
 │   └── cf-worker-builder/         # CLI: compiles .bx → bytecode, embeds in WASM
 │
-├── examples/                      # Production deployments (live at *.codetek.us)
+├── examples/                      # Demo apps (live at *.codetek.us)
 │   ├── boxdox/                    # BoxLang documentation viewer with AI chat
-│   │   ├── src/listeners/         # BoxLang Listener (.bx)
-│   │   ├── client/                # React/TypeScript SPA frontend
-│   │   ├── mcf-worker.js          # DO shell with RAG pipeline
-│   │   ├── schema.sql             # D1 database schema
-│   │   └── build-multi.sh         # Multi-file build script
-│   │
-│   └── skychat/                   # RAG-powered AI chat with OpenRouter
-│       ├── src/listeners/         # BoxLang Listener (.bx)
-│       ├── mcf-worker.js          # DO shell with OpenRouter streaming
-│       ├── schema.sql             # D1 + Vectorize schemas
-│       └── build-multi.sh         # Multi-file build script
+│   ├── chatroom/                  # Multi-client chat (Web UI + WebSocket)
+│   ├── counter/                   # Stateful click counter (broadcast)
+│   ├── echo/                      # Basic echo server (WebSocket)
+│   ├── jsonfmt/                   # JSON validator (manual parsing)
+│   ├── moonphase/                 # Moon phase calculator
+│   ├── romannumeral/              # Roman numeral converter
+│   ├── skychat/                   # RAG-powered AI chat with OpenRouter
+│   ├── textanalyzer/              # Word/sentence frequency analyzer
+│   └── todo/                      # Collaborative todo list (HTTP REST API)
 │
 ├── packages/mx-ai/                # MatchBox AI module (port of bx-ai BIFs to WASM)
 ├── skybox-cli/                    # CommandBox module for scaffolding/deploying
@@ -297,18 +291,18 @@ All deployed Cloudflare Workers follow: **`skybox-<app>`**
 
 ## Source Demos
 
-Source demos live in `crates/matchbox-cf-worker/examples/` and are tested end-to-end under `workerd`:
+Source demos live in `examples/` and are deployed to Cloudflare Workers:
 
-| Demo | Description | Protocol |
-|------|-------------|----------|
-| **echo** | Basic echo server | WebSocket text |
-| **counter** | Stateful counter with broadcast | WebSocket JSON |
-| **chatroom** | Multi-client chat with Web UI | WebSocket + Static Assets |
-| **moonphase** | Moon phase calculator | WebSocket JSON |
-| **romannumeral** | Roman numeral ↔ integer converter | WebSocket text |
-| **jsonfmt** | JSON validator (manual, no `deserializeJSON`) | WebSocket text |
-| **textanalyzer** | Word/sentence frequency analyzer | WebSocket text |
-| **todo** | Collaborative todo list (HTTP API + HTML UI) | HTTP REST |
+| Demo | Description | Protocol | URL |
+|------|-------------|----------|-----|
+| **echo** | Basic echo server | WebSocket text | -- |
+| **counter** | Stateful counter with broadcast | WebSocket JSON | -- |
+| **chatroom** | Multi-client chat with Web UI | WebSocket + Static Assets | [skybox-chatroom.codetek.us](https://skybox-chatroom.codetek.us) |
+| **moonphase** | Moon phase calculator | WebSocket JSON | [skybox-moonphase.codetek.us](https://skybox-moonphase.codetek.us) |
+| **romannumeral** | Roman numeral ↔ integer converter | WebSocket text | [skybox-romannumeral.codetek.us](https://skybox-romannumeral.codetek.us) |
+| **jsonfmt** | JSON validator (manual, no `deserializeJSON`) | WebSocket text | [skybox-jsonfmt.codetek.us](https://skybox-jsonfmt.codetek.us) |
+| **textanalyzer** | Word/sentence frequency analyzer | WebSocket text | [skybox-textanalyzer.codetek.us](https://skybox-textanalyzer.codetek.us) |
+| **todo** | Collaborative todo list (HTTP API + HTML UI) | HTTP REST | [skybox-todo.codetek.us](https://skybox-todo.codetek.us) |
 
 ## Deployment
 
