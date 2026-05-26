@@ -39,6 +39,75 @@ class MoonPhaseListener {
 
     function onClose(required channel) {}
 
+    function onHttpGet(required struct request) {
+        var method = request.method;
+        var path = request.path;
+        var q = request.query ?: {};
+
+        if (method == "GET" && path == "/api/phase") {
+            var dateStr = q.date ?: "";
+            var year = 2026;
+            var month = 5;
+            var day = 19;
+            if (len(dateStr) > 0) {
+                var parts = listToArray(dateStr, "-");
+                if (arrayLen(parts) == 3) {
+                    year = numericParse(parts[1]);
+                    month = numericParse(parts[2]);
+                    day = numericParse(parts[3]);
+                    if (isNull(year)) year = 2026;
+                    if (isNull(month)) month = 5;
+                    if (isNull(day)) day = 19;
+                }
+            }
+            var phase = computePhase(year, month, day);
+            var phaseName = getPhaseName(phase);
+            var illumination = getIllumination(phase);
+            var dateStr = pad2(year) & "-" & pad2(month) & "-" & pad2(day);
+            return {"status":200,"headers":{"Content-Type":"application/json"},"body":'{"date":"' & dateStr & '","phase":' & toString(phase) & ',"phaseName":"' & phaseName & '","illumination":' & toString(illumination) & '}'};
+        }
+
+        return {"status":404,"headers":{"Content-Type":"text/plain"},"body":"Not Found"};
+    }
+
+    function computePhase(required year, required month, required day) {
+        var y = year - 2000;
+        var days = y * 365 + intDiv(y, 4) - intDiv(y, 100) + intDiv(y, 400) + dayOfYear(month, day) - 1;
+        var knownNewMoon = 6;
+        var synodic = 29.53058867;
+        var daysSinceNewMoon = days - knownNewMoon + 1;
+        if (daysSinceNewMoon < 0) daysSinceNewMoon = daysSinceNewMoon + intDiv(0 - daysSinceNewMoon, synodic) * synodic + synodic;
+        var phaseRaw = daysSinceNewMoon / synodic;
+        var phase = phaseRaw - intPart(phaseRaw);
+        if (phase < 0) phase = phase + 1;
+        return phase;
+    }
+
+    function intDiv(required a, required b) {
+        var result = 0;
+        while (result * b <= a) { result = result + 1; }
+        return result - 1;
+    }
+
+    function intPart(required x) {
+        if (x < 0) return 0;
+        var result = 0;
+        while (result + 1 <= x) { result = result + 1; }
+        return result;
+    }
+
+    function dayOfYear(required month, required day) {
+        var mDays = [31,28,31,30,31,30,31,31,30,31,30,31];
+        var total = 0;
+        for (var i = 1; i < month; i = i + 1) { total = total + mDays[i]; }
+        return total + day;
+    }
+
+    function pad2(required n) {
+        if (n < 10) return "0" & toString(n);
+        return toString(n);
+    }
+
     function samplePhase(required visitNum) {
         var steps = [0.05,0.15,0.25,0.35,0.45,0.50,0.55,0.65,0.75,0.85,0.95];
         var idx = ((visitNum - 1) % arrayLen(steps)) + 1;
@@ -60,5 +129,40 @@ class MoonPhaseListener {
         var diff = phase - 0.5;
         if (diff < 0) diff = 0 - diff;
         return round((1 - 2 * diff) * 100);
+    }
+
+    function numericParse(required s) {
+        var str = trim(s);
+        if (len(str) == 0) return null;
+        var result = 0;
+        var start = 1;
+        if (mid(str, 1, 1) == "-") { start = 2; }
+        for (var i = start; i <= len(str); i = i + 1) {
+            var c = mid(str, i, 1);
+            if (c >= "0" && c <= "9") {
+                result = result * 10 + charToDigit(c);
+            } else {
+                return null;
+            }
+        }
+        return result;
+    }
+
+    function charToDigit(required c) {
+        if (c == "0") return 0;
+        if (c == "1") return 1;
+        if (c == "2") return 2;
+        if (c == "3") return 3;
+        if (c == "4") return 4;
+        if (c == "5") return 5;
+        if (c == "6") return 6;
+        if (c == "7") return 7;
+        if (c == "8") return 8;
+        if (c == "9") return 9;
+        return 0;
+    }
+
+    function toString(required v) {
+        return v & "";
     }
 }

@@ -1,0 +1,179 @@
+{
+  "concepts/async-callout-bridge": [
+    "concepts/bif-registration-rust-based",
+    "entities/cloudflare-workers",
+    "entities/durable-objects",
+    "entities/matchbox",
+    "sources/SRC-2026-05-26-001",
+    "sources/matchbox-feature-jit-supersedes-vendor-patches",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "concepts/bif-registration-rust-based": [
+    "concepts/async-callout-bridge",
+    "concepts/compile-time-module-system",
+    "concepts/native-fusion",
+    "entities/matchbox",
+    "entities/wirebox",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "concepts/cfml-compatibility": [
+    "entities/boxlang",
+    "entities/cfml",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "concepts/coldbox-dispatcher": [
+    "sources/SRC-2026-05-26-001"
+  ],
+  "concepts/compile-time-module-system": [
+    "concepts/bif-registration-rust-based",
+    "concepts/cfml-compatibility",
+    "concepts/native-fusion",
+    "concepts/wirebox-di-container",
+    "entities/boxlang",
+    "entities/cfml",
+    "entities/matchbox",
+    "entities/wirebox",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "concepts/native-fusion": [
+    "concepts/bif-registration-rust-based",
+    "concepts/compile-time-module-system",
+    "entities/matchbox",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "concepts/wirebox-di-container": [
+    "entities/coldbox",
+    "entities/wirebox",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "entities/boxlang": [
+    "concepts/async-callout-bridge",
+    "concepts/bif-registration-rust-based",
+    "concepts/cfml-compatibility",
+    "concepts/compile-time-module-system",
+    "concepts/native-fusion",
+    "entities/cachebox",
+    "entities/cfml",
+    "entities/coldbox",
+    "entities/commandbox",
+    "entities/logbox",
+    "entities/matchbox",
+    "entities/ortus-solutions",
+    "entities/testbox",
+    "entities/wirebox",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "entities/cachebox": [
+    "entities/boxlang",
+    "entities/coldbox",
+    "entities/ortus-solutions",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "entities/cfml": [
+    "concepts/cfml-compatibility",
+    "entities/boxlang",
+    "entities/coldbox",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "entities/cloudflare-workers": [
+    "concepts/async-callout-bridge",
+    "entities/durable-objects",
+    "entities/matchbox",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "entities/coldbox": [
+    "concepts/coldbox-dispatcher",
+    "concepts/compile-time-module-system",
+    "concepts/wirebox-di-container",
+    "entities/boxlang",
+    "entities/cachebox",
+    "entities/logbox",
+    "entities/matchbox",
+    "entities/ortus-solutions",
+    "entities/testbox",
+    "entities/wirebox",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "entities/commandbox": [
+    "entities/boxlang",
+    "entities/ortus-solutions",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "entities/durable-objects": [
+    "entities/cloudflare-workers",
+    "entities/matchbox",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "entities/logbox": [
+    "entities/boxlang",
+    "entities/coldbox",
+    "entities/ortus-solutions",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "entities/matchbox": [
+    "concepts/async-callout-bridge",
+    "concepts/bif-registration-rust-based",
+    "concepts/cfml-compatibility",
+    "concepts/coldbox-dispatcher",
+    "concepts/compile-time-module-system",
+    "concepts/native-fusion",
+    "concepts/wirebox-di-container",
+    "entities/boxlang",
+    "entities/cfml",
+    "entities/cloudflare-workers",
+    "entities/coldbox",
+    "entities/durable-objects",
+    "entities/wirebox",
+    "sources/SRC-2026-05-26-001",
+    "sources/matchbox-feature-jit-supersedes-vendor-patches",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "entities/ortus-solutions": [
+    "concepts/wirebox-di-container",
+    "entities/boxlang",
+    "entities/cfml",
+    "entities/coldbox",
+    "entities/wirebox",
+    "sources/SRC-2026-05-26-001",
+    "sources/ortusbooks-pi-extension-renamed",
+    "sources/ortusbooks-pi-skills-index",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "entities/testbox": [
+    "entities/boxlang",
+    "entities/coldbox",
+    "entities/ortus-solutions",
+    "sources/SRC-2026-05-26-001"
+  ],
+  "entities/wirebox": [
+    "concepts/wirebox-di-container",
+    "entities/boxlang",
+    "entities/coldbox",
+    "entities/matchbox",
+    "entities/ortus-solutions",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "sources/SRC-2026-05-26-001": [
+    "entities/cachebox",
+    "entities/commandbox",
+    "entities/logbox",
+    "entities/testbox",
+    "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "sources/matchbox-feature-jit-supersedes-vendor-patches": [],
+  "sources/ortusbooks-pi-extension-renamed": [],
+  "sources/ortusbooks-pi-service-architecture": [],
+  "sources/ortusbooks-pi-skills-index": [],
+  "syntheses/skybox-ecosystem-compatibility-roadmap": [
+    "concepts/coldbox-dispatcher",
+    "sources/SRC-2026-05-26-001"
+  ]
+}

@@ -1,0 +1,25 @@
+{"timestamp":"2026-05-26T02:14:12.426Z","kind":"bootstrap","topic":"SkyBox Architecture - MatchBox WASM runtime on Cloudflare Workers","mode":"personal"}
+{"timestamp":"2026-05-26T02:14:15.545Z","kind":"capture","source_id":"SRC-2026-05-26-001","file_path":"/home/k/Git/SkyBox/.ai/reports/2026-05-25-skybox-ecosystem-gap-analysis.md","format":"markdown"}
+{"timestamp":"2026-05-26T02:14:46.885Z","kind":"ensure_page","page_type":"entity","title":"MatchBox","path":"entities/matchbox"}
+{"timestamp":"2026-05-26T02:14:52.965Z","kind":"ensure_page","page_type":"entity","title":"ColdBox","path":"entities/coldbox"}
+{"timestamp":"2026-05-26T02:14:57.963Z","kind":"ensure_page","page_type":"entity","title":"WireBox","path":"entities/wirebox"}
+{"timestamp":"2026-05-26T02:15:03.181Z","kind":"ensure_page","page_type":"entity","title":"BoxLang","path":"entities/boxlang"}
+{"timestamp":"2026-05-26T02:15:08.919Z","kind":"ensure_page","page_type":"entity","title":"CFML","path":"entities/cfml"}
+{"timestamp":"2026-05-26T02:15:14.409Z","kind":"ensure_page","page_type":"concept","title":"Compile-time Module System","path":"concepts/compile-time-module-system"}
+{"timestamp":"2026-05-26T02:15:20.204Z","kind":"ensure_page","page_type":"concept","title":"Async Callout Bridge","path":"concepts/async-callout-bridge"}
+{"timestamp":"2026-05-26T02:15:24.762Z","kind":"ensure_page","page_type":"concept","title":"Native Fusion","path":"concepts/native-fusion"}
+{"timestamp":"2026-05-26T02:15:32.440Z","kind":"ensure_page","page_type":"concept","title":"BIF Registration (Rust-based)","path":"concepts/bif-registration-rust-based"}
+{"timestamp":"2026-05-26T02:15:39.890Z","kind":"ensure_page","page_type":"concept","title":"CFML Compatibility","path":"concepts/cfml-compatibility"}
+{"timestamp":"2026-05-26T02:15:47.646Z","kind":"ensure_page","page_type":"concept","title":"WireBox DI Container","path":"concepts/wirebox-di-container"}
+{"timestamp":"2026-05-26T02:15:57.346Z","kind":"ensure_page","page_type":"synthesis","title":"SkyBox Ecosystem Compatibility Roadmap","path":"syntheses/skybox-ecosystem-compatibility-roadmap"}
+{"timestamp":"2026-05-26T02:16:02.167Z","kind":"rebuild_meta"}
+{"timestamp":"2026-05-26T02:16:06.664Z","kind":"lint","orphans":2,"missing_pages":31,"contradictions":0,"auto_fix":true}
+{"timestamp":"2026-05-26T02:16:58.981Z","kind":"rebuild_meta"}
+{"timestamp":"2026-05-26T02:17:06.952Z","kind":"lint","orphans":2,"missing_pages":1,"contradictions":0,"auto_fix":false}
+{"timestamp":"2026-05-26T02:17:21.384Z","kind":"ensure_page","page_type":"concept","title":"ColdBox Dispatcher","path":"concepts/coldbox-dispatcher"}
+{"timestamp":"2026-05-26T02:17:23.779Z","kind":"rebuild_meta"}
+{"timestamp":"2026-05-26T02:17:26.237Z","kind":"lint","orphans":0,"missing_pages":0,"contradictions":0,"auto_fix":false}
+{"timestamp":"2026-05-26T02:36:00.028Z","kind":"retro","slug":"matchbox-feature-jit-supersedes-vendor-patches","title":"MatchBox feature/jit branch supersedes vendor patches differently than expected","category":"architecture"}
+{"timestamp":"2026-05-26T02:43:42.113Z","kind":"retro","slug":"ortusbooks-pi-extension-renamed","title":"ortus-docs extension renamed to ortusbooks-pi","category":"uncategorized"}
+{"timestamp":"2026-05-26T02:52:02.397Z","kind":"retro","slug":"ortusbooks-pi-skills-index","title":"Skills index + MCP caching in ortusbooks-pi","category":"uncategorized"}
+{"timestamp":"2026-05-26T03:01:52.050Z","kind":"retro","slug":"ortusbooks-pi-service-architecture","title":"Pure DI service architecture for pi extension","category":"uncategorized"}
