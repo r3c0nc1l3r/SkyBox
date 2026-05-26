@@ -24,6 +24,10 @@
     "skills-repo.ts",
     "skills-index.ts",
     "cache-manager.ts",
+    "core/",
+    "services/",
+    "providers/",
+    "lib/",
     "agents/",
     "prompts/",
     "specs/",
@@ -36,8 +40,12 @@
     "typebox": "*"
   },
   "pi": {
-    "extensions": ["./index.ts"],
-    "prompts": ["./prompts"]
+    "extensions": [
+      "./index.ts"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
   },
   "repository": {
     "type": "git",
