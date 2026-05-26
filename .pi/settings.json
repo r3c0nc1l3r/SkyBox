@@ -1,0 +1,6 @@
+{
+  "packages": [
+    "npm:@lnilluv/pi-ralph-loop",
+    "extensions/ortusbooks-pi"
+  ]
+}
