@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ortus",
+  "project_id": "4e69deb2-609a-485b-b337-3f180e26f550"
+}
