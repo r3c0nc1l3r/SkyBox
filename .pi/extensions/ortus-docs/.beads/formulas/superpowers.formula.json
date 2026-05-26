@@ -1,0 +1,54 @@
+{
+  "formula": "superpowers",
+  "description": "Spec-driven development workflow for the Ortus Docs extension. Each feature starts with a detailed spec, gets implemented, reviewed, and closed — with full traceability.",
+  "version": 1,
+  "labels": ["superpowers", "spec-driven"],
+  "variables": {
+    "task": {
+      "description": "Feature name / task description",
+      "required": true
+    },
+    "context": {
+      "description": "Context, references, and links for the spec",
+      "required": false,
+      "default": "See PLAN.md for architecture context"
+    }
+  },
+  "steps": [
+    {
+      "id": "spec",
+      "title": "{{task}} — Spec",
+      "description": "Write a detailed specification for this feature covering:\n\n**Goal:** What does this feature do? Why does it exist?\n\n**Interface:** Tool parameters, return format, error handling.\n- What pi.registerTool() call shape?\n- What parameters (TypeBox schemas)?\n- What does the LLM receive as output?\n\n**Backend:** How does it work internally?\n- MCP calls, parsing, caching, model interaction\n- Data flow diagrams where helpful\n\n**Edge cases:** Timeouts, network failures, abort handling, empty results, malformed responses.\n\n**Testing:** How to verify it works.\n- Manual test commands\n- Expected output samples\n\n**References:**\n- PLAN.md architecture\n- {{context}}\n- Relevant PI extension API docs\n",
+      "type": "task",
+      "priority": 1,
+      "labels": ["superpowers", "spec"]
+    },
+    {
+      "id": "implement",
+      "title": "{{task}} — Implementation",
+      "description": "Implement the feature according to the spec.\n\n**Must do:**\n- Match the exact tool parameters and return format from the spec\n- Handle all edge cases documented in the spec\n- Wire everything through index.ts\n- Test with real MCP endpoint calls\n\n**Must NOT do:**\n- Deviate from the spec without updating it first\n- Add unspecified parameters or behaviors",
+      "type": "task",
+      "priority": 1,
+      "labels": ["superpowers", "implementation"],
+      "depends_on": ["spec"]
+    },
+    {
+      "id": "review",
+      "title": "{{task}} — Review",
+      "description": "Review the implementation against the spec.\n- Does the tool signature match the spec exactly?\n- Are all edge cases handled?\n- Is error handling consistent?\n- Is the output format LLM-friendly?\n- Are there any regressions?",
+      "type": "task",
+      "priority": 2,
+      "labels": ["superpowers", "review"],
+      "depends_on": ["implement"]
+    },
+    {
+      "id": "close",
+      "title": "{{task}} — Close",
+      "description": "Close out the feature cycle.\n- Update memories with new architectural insights\n- Close all related issues\n- Verify the feature works end-to-end",
+      "type": "task",
+      "priority": 3,
+      "labels": ["superpowers", "closeout"],
+      "depends_on": ["review"]
+    }
+  ]
+}
