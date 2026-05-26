@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "last_updated": "2026-05-26T03:01:52.055Z",
+  "last_updated": "2026-05-26T03:44:01.083Z",
   "pages": {
     "concepts/async-callout-bridge": {
       "type": "concept",
@@ -165,6 +165,33 @@
       "captured": "2026-05-26",
       "status": "skeleton"
     },
+    "sources/coldbox-on-matchbox-hybrid-strategy": {
+      "type": "source",
+      "title": "\"ColdBox on MatchBox requires 6-layer build-up\"",
+      "created": "2026-05-26",
+      "updated": "2026-05-26",
+      "slug": "coldbox-on-matchbox-hybrid-strategy",
+      "status": "insight",
+      "category": "architecture"
+    },
+    "sources/feature-jit-bxvm-trait-methods-needed": {
+      "type": "source",
+      "title": "\"feature/jit migration needs 6 new BxVM trait methods\"",
+      "created": "2026-05-26",
+      "updated": "2026-05-26",
+      "slug": "feature-jit-bxvm-trait-methods-needed",
+      "status": "insight",
+      "category": "architecture"
+    },
+    "sources/feature-jit-replaces-vendor-architecture": {
+      "type": "source",
+      "title": "\"feature/jit replaces dispatch architecture, not just patches\"",
+      "created": "2026-05-26",
+      "updated": "2026-05-26",
+      "slug": "feature-jit-replaces-vendor-architecture",
+      "status": "insight",
+      "category": "architecture"
+    },
     "sources/matchbox-feature-jit-supersedes-vendor-patches": {
       "type": "source",
       "title": "\"MatchBox feature/jit branch supersedes vendor patches differently than expected\"",
@@ -203,7 +230,7 @@
       "title": "skybox-ecosystem-compatibility-roadmap",
       "created": "2026-05-26",
       "updated": "2026-05-26",
-      "sources": "[sources/SRC-2026-05-26-001]"
+      "sources": ""
     }
   }
 }

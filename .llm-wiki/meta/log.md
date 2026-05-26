@@ -74,3 +74,12 @@
 ## [2026-05-26T03:01:52.050Z] retro
 - slug: "ortusbooks-pi-service-architecture", title: "Pure DI service architecture for pi extension", category: "uncategorized"
 
+## [2026-05-26T03:43:35.669Z] retro
+- slug: "feature-jit-bxvm-trait-methods-needed", title: "feature/jit migration needs 6 new BxVM trait methods", category: "architecture"
+
+## [2026-05-26T03:43:35.692Z] retro
+- slug: "feature-jit-replaces-vendor-architecture", title: "feature/jit replaces dispatch architecture, not just patches", category: "architecture"
+
+## [2026-05-26T03:43:35.708Z] retro
+- slug: "coldbox-on-matchbox-hybrid-strategy", title: "ColdBox on MatchBox requires 6-layer build-up", category: "architecture"
+

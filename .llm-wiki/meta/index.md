@@ -29,6 +29,9 @@
 
 ## Sources
 
+- [[sources/coldbox-on-matchbox-hybrid-strategy]] — "ColdBox on MatchBox requires 6-layer build-up" *(created: 2026-05-26)*
+- [[sources/feature-jit-bxvm-trait-methods-needed]] — "feature/jit migration needs 6 new BxVM trait methods" *(created: 2026-05-26)*
+- [[sources/feature-jit-replaces-vendor-architecture]] — "feature/jit replaces dispatch architecture, not just patches" *(created: 2026-05-26)*
 - [[sources/matchbox-feature-jit-supersedes-vendor-patches]] — "MatchBox feature/jit branch supersedes vendor patches differently than expected" *(created: 2026-05-26)*
 - [[sources/ortusbooks-pi-extension-renamed]] — "ortus-docs extension renamed to ortusbooks-pi" *(created: 2026-05-26)*
 - [[sources/ortusbooks-pi-service-architecture]] — "Pure DI service architecture for pi extension" *(created: 2026-05-26)*
@@ -40,4 +43,4 @@
 - [[syntheses/skybox-ecosystem-compatibility-roadmap]] — skybox-ecosystem-compatibility-roadmap *(created: 2026-05-26)*
 
 ---
-*Last updated: 2026-05-26T03:01:52.055Z* | *Total pages: 25*
+*Last updated: 2026-05-26T03:44:01.083Z* | *Total pages: 28*

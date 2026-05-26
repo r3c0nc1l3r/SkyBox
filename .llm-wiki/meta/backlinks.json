@@ -19,8 +19,7 @@
   "concepts/cfml-compatibility": [
     "entities/boxlang",
     "entities/cfml",
-    "sources/SRC-2026-05-26-001",
-    "syntheses/skybox-ecosystem-compatibility-roadmap"
+    "sources/SRC-2026-05-26-001"
   ],
   "concepts/coldbox-dispatcher": [
     "sources/SRC-2026-05-26-001"
@@ -41,8 +40,7 @@
     "concepts/bif-registration-rust-based",
     "concepts/compile-time-module-system",
     "entities/matchbox",
-    "sources/SRC-2026-05-26-001",
-    "syntheses/skybox-ecosystem-compatibility-roadmap"
+    "sources/SRC-2026-05-26-001"
   ],
   "concepts/wirebox-di-container": [
     "entities/coldbox",
@@ -65,7 +63,8 @@
     "entities/ortus-solutions",
     "entities/testbox",
     "entities/wirebox",
-    "sources/SRC-2026-05-26-001"
+    "sources/SRC-2026-05-26-001",
+    "sources/coldbox-on-matchbox-hybrid-strategy"
   ],
   "entities/cachebox": [
     "entities/boxlang",
@@ -84,7 +83,8 @@
     "concepts/async-callout-bridge",
     "entities/durable-objects",
     "entities/matchbox",
-    "sources/SRC-2026-05-26-001"
+    "sources/SRC-2026-05-26-001",
+    "sources/coldbox-on-matchbox-hybrid-strategy"
   ],
   "entities/coldbox": [
     "concepts/coldbox-dispatcher",
@@ -98,6 +98,7 @@
     "entities/testbox",
     "entities/wirebox",
     "sources/SRC-2026-05-26-001",
+    "sources/coldbox-on-matchbox-hybrid-strategy",
     "syntheses/skybox-ecosystem-compatibility-roadmap"
   ],
   "entities/commandbox": [
@@ -131,6 +132,9 @@
     "entities/durable-objects",
     "entities/wirebox",
     "sources/SRC-2026-05-26-001",
+    "sources/coldbox-on-matchbox-hybrid-strategy",
+    "sources/feature-jit-bxvm-trait-methods-needed",
+    "sources/feature-jit-replaces-vendor-architecture",
     "sources/matchbox-feature-jit-supersedes-vendor-patches",
     "syntheses/skybox-ecosystem-compatibility-roadmap"
   ],
@@ -166,6 +170,15 @@
     "entities/logbox",
     "entities/testbox",
     "sources/SRC-2026-05-26-001",
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "sources/coldbox-on-matchbox-hybrid-strategy": [
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "sources/feature-jit-bxvm-trait-methods-needed": [
+    "syntheses/skybox-ecosystem-compatibility-roadmap"
+  ],
+  "sources/feature-jit-replaces-vendor-architecture": [
     "syntheses/skybox-ecosystem-compatibility-roadmap"
   ],
   "sources/matchbox-feature-jit-supersedes-vendor-patches": [],

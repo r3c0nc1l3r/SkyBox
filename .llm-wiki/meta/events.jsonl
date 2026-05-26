@@ -23,3 +23,6 @@
 {"timestamp":"2026-05-26T02:43:42.113Z","kind":"retro","slug":"ortusbooks-pi-extension-renamed","title":"ortus-docs extension renamed to ortusbooks-pi","category":"uncategorized"}
 {"timestamp":"2026-05-26T02:52:02.397Z","kind":"retro","slug":"ortusbooks-pi-skills-index","title":"Skills index + MCP caching in ortusbooks-pi","category":"uncategorized"}
 {"timestamp":"2026-05-26T03:01:52.050Z","kind":"retro","slug":"ortusbooks-pi-service-architecture","title":"Pure DI service architecture for pi extension","category":"uncategorized"}
+{"timestamp":"2026-05-26T03:43:35.669Z","kind":"retro","slug":"feature-jit-bxvm-trait-methods-needed","title":"feature/jit migration needs 6 new BxVM trait methods","category":"architecture"}
+{"timestamp":"2026-05-26T03:43:35.692Z","kind":"retro","slug":"feature-jit-replaces-vendor-architecture","title":"feature/jit replaces dispatch architecture, not just patches","category":"architecture"}
+{"timestamp":"2026-05-26T03:43:35.708Z","kind":"retro","slug":"coldbox-on-matchbox-hybrid-strategy","title":"ColdBox on MatchBox requires 6-layer build-up","category":"architecture"}
