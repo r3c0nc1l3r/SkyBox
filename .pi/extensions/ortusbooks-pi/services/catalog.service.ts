@@ -177,7 +177,7 @@ export class CatalogService implements ICatalogService {
 		for (const product of PRODUCTS) {
 			const entry: CatalogEntry = {
 				name: product.name,
-				description: `${product.label} — documentation available at ${product.mcpUrl.replace("/~gitbook/mcp", ".ortusbooks.com")}`,
+				description: `${product.label} — documentation available at ${product.mcpUrl.replace("/~gitbook/mcp", "")}`,
 				repo: "sources.ts (product docs)",
 				category: "product",
 			};
@@ -208,8 +208,15 @@ export class CatalogService implements ICatalogService {
 
 		// ── Apply group ──────────────────────────────────────────────
 		const group = options?.group?.trim().toLowerCase() || "all";
-		if (group !== "all") {
-			filtered = filtered.filter((e) => e.category === group);
+		// Map plural enum labels to singular category values
+		const groupMap: Record<string, string> = {
+			products: "product",
+			modules: "module",
+			concepts: "concept",
+		};
+		const targetCategory = groupMap[group];
+		if (targetCategory) {
+			filtered = filtered.filter((e) => e.category === targetCategory);
 		}
 
 		// ── Sort: category order, then name ──────────────────────────
@@ -267,7 +274,7 @@ export class CatalogService implements ICatalogService {
 				parts.push("|------|-------------|------|");
 				for (const c of concepts) {
 					parts.push(
-						`| ${c.name} | ${c.description.replace(/\n/g, " ")} | ${c.repo} |",
+						`| ${c.name} | ${c.description.replace(/\n/g, " ")} | ${c.repo} |`,
 					);
 				}
 				parts.push("");
