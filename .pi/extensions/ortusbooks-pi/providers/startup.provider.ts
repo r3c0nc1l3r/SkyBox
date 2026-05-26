@@ -53,7 +53,7 @@ export function registerStartup(pi: ExtensionAPI, skills: ISkillsService): void 
 		}
 
 		ctx.ui.notify(
-			`Ortus Docs: ${PRODUCTS.length} products, ${skillsNote}, ortus-scout + ortus-scholar agents`,
+			`Ortus Docs: ${PRODUCTS.length} products, ${skillsNote}, ortus-scout + ortus-scholar agents, ortus_catalog tool`,
 			"info",
 		);
 	});

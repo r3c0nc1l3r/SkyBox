@@ -36,6 +36,29 @@ export interface ISearchService {
 	): Promise<string>;
 }
 
+export interface CatalogEntry {
+	name: string;
+	description: string;
+	repo: string;
+	category: "module" | "concept" | "product" | "general";
+	applyTo?: string;
+}
+
+export interface ICatalogService {
+	/**
+	 * Build the catalog from scratch (scans all skill repos + product sources).
+	 */
+	build(): CatalogEntry[];
+
+	/**
+	 * Format catalog entries as markdown, optionally filtered and grouped.
+	 */
+	format(
+		entries: CatalogEntry[],
+		options?: { filter?: string; group?: string },
+	): string;
+}
+
 export interface IScholarService {
 	research(
 		task: string,

@@ -17,10 +17,12 @@ import { McpService } from "../services/mcp.service.ts";
 import { SkillsService } from "../services/skills.service.ts";
 import { SearchService } from "../services/search.service.ts";
 import { ScholarService } from "../services/scholar.service.ts";
+import { CatalogService } from "../services/catalog.service.ts";
 
 import { registerSearchProvider } from "../providers/search.provider.ts";
 import { registerDocReaderProvider } from "../providers/doc-reader.provider.ts";
 import { registerScholarProvider } from "../providers/scholar.provider.ts";
+import { registerCatalogProvider } from "../providers/catalog.provider.ts";
 import { registerCommands } from "../providers/commands.provider.ts";
 import { registerStartup } from "../providers/startup.provider.ts";
 
@@ -31,9 +33,11 @@ export function bootstrapExtension(pi: ExtensionAPI): void {
 	const skillsService = new SkillsService(config);
 	const searchService = new SearchService(config, mcpService, skillsService);
 	const scholarService = new ScholarService(config, mcpService, skillsService);
+	const catalogService = new CatalogService();
 
 	// ── Register all providers ────────────────────────────────────────
 	registerSearchProvider(pi, searchService);
+	registerCatalogProvider(pi, catalogService);
 	registerDocReaderProvider(pi, config, mcpService);
 	registerScholarProvider(pi, scholarService);
 	registerCommands(pi, skillsService);
